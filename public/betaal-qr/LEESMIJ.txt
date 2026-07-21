@@ -1,0 +1,23 @@
+Betaal-QR afbeeldingen
+======================
+
+Zet hier je eigen betaal-QR-plaatjes neer. De meedoen-pagina toont per bundel
+de bijbehorende QR in de betaalstap.
+
+Verwachte bestandsnamen (pas de paden desgewenst aan in lib/bundels.ts):
+
+  5.png    -> QR om € 5 te betalen  (3 loten)
+  10.png   -> QR om € 10 te betalen (7 loten)
+  15.png   -> QR om € 15 te betalen (11 loten)
+  20.png   -> QR om € 20 te betalen (15 loten)
+
+Heb je maar één algemene QR (bijv. naar de clubrekening waar je zelf het bedrag
+invult)? Zet die dan neer als:
+
+  algemeen.png
+
+en verwijder desnoods de losse `qr`-paden in lib/bundels.ts, dan valt alles op
+de algemene QR terug.
+
+PNG of JPG mag allebei (gebruik dan .jpg en pas het pad in lib/bundels.ts aan).
+Na het toevoegen: opnieuw deployen met `npx vercel --prod`.

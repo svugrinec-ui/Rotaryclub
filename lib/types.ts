@@ -1,0 +1,56 @@
+export type RondeStatus = 'open' | 'gesloten' | 'getrokken';
+
+export interface Ronde {
+  id: string;
+  naam: string;
+  maand: string; // ISO date
+  status: RondeStatus;
+  lotprijs: number;
+  created_at: string;
+}
+
+export interface Experience {
+  id: string;
+  ronde_id: string;
+  titel: string;
+  omschrijving: string | null;
+  aanbieder: string | null;
+  sort: number;
+  created_at: string;
+}
+
+export interface Lot {
+  id: string;
+  ronde_id: string;
+  lotnummer: number;
+  naam: string;
+  contact: string | null;
+  betaald: boolean;
+  betaald_op: string | null;
+  bedrag: number; // betaald bedrag voor dit lot (bundelbedrag verdeeld over de loten)
+  created_at: string;
+}
+
+export interface Winnaar {
+  id: string;
+  ronde_id: string | null;
+  maand: string; // ISO date
+  naam: string;
+  experience_titel: string;
+  toelichting: string | null;
+  foto_url: string | null;
+  opbrengst: number; // opbrengst voor het goede doel in deze loterijweek
+  gepubliceerd: boolean;
+  created_at: string;
+}
+
+export interface Doel {
+  id: string;
+  naam: string;
+  omschrijving: string | null;
+  opbrengst: number;
+  jaar: number | null;
+  maand: string | null; // eerste van de maand waarvoor dit doel geldt
+  sort: number;
+  created_at: string;
+}

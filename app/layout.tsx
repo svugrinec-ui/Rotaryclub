@@ -1,0 +1,47 @@
+import type { Metadata } from 'next';
+import Link from 'next/link';
+import './globals.css';
+
+export const metadata: Metadata = {
+  title: 'Rotary Experiences — Loterij Soest-Baarn',
+  description:
+    'Winnaars, goede doelen en digitale loten van de dinsdagavondloterij van Rotary Club Soest-Baarn.',
+};
+
+export default function RootLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <html lang="nl">
+      <body>
+        <header className="site-header">
+          <div className="container header-inner">
+            <Link href="/" className="brand">
+              <span className="brand-wheel" aria-hidden>⚙</span>
+              <span className="brand-text">
+                Rotary <strong>Experiences</strong>
+                <small>Club Soest-Baarn</small>
+              </span>
+            </Link>
+            <nav className="site-nav">
+              <Link href="/">Winnaars</Link>
+              <Link href="/goede-doelen">Goede doelen</Link>
+              <Link href="/meedoen">Meedoen</Link>
+            </nav>
+          </div>
+        </header>
+        <main className="container">{children}</main>
+        <footer className="site-footer">
+          <div className="container">
+            <p>
+              Rotary Club Soest-Baarn · Loterijcommissie ·{' '}
+              <Link href="/beheer">Beheer</Link>
+            </p>
+            <p className="footer-note">
+              “De mooiste prijs zit niet in een fles wijn, maar in de tijd en
+              aandacht die we met elkaar delen.”
+            </p>
+          </div>
+        </footer>
+      </body>
+    </html>
+  );
+}
