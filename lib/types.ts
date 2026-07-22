@@ -37,6 +37,7 @@ export interface Winnaar {
   maand: string; // ISO date
   naam: string;
   experience_titel: string;
+  aanbieder: string | null; // wie de experience aanbood
   toelichting: string | null;
   foto_url: string | null;
   opbrengst: number; // opbrengst voor het goede doel in deze loterijweek
@@ -51,6 +52,7 @@ export interface Doel {
   opbrengst: number;
   jaar: number | null;
   maand: string | null; // eerste van de maand waarvoor dit doel geldt
+  foto_url: string | null; // teaser-foto bij het goede doel
   sort: number;
   created_at: string;
 }

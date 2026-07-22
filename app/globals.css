@@ -15,6 +15,8 @@
 
 * { box-sizing: border-box; }
 
+svg.icon { vertical-align: -0.15em; flex-shrink: 0; }
+
 html, body { margin: 0; padding: 0; }
 
 body {
@@ -75,6 +77,8 @@ h3 { font-size: 18px; font-weight: 700; line-height: 1.3; }
   font-size: 15px;
 }
 .site-nav a:hover { background: rgba(255, 255, 255, 0.12); text-decoration: none; }
+.beheer-link { display: inline-flex; align-items: center; justify-content: center; padding: 8px 10px; }
+.beheer-link svg { display: block; }
 
 /* ---------- Hero ---------- */
 .hero {
@@ -178,6 +182,15 @@ section { margin: 40px 0; }
   box-shadow: var(--shadow);
   margin-bottom: 12px;
 }
+.doel-row-left { display: flex; align-items: center; gap: 14px; min-width: 0; }
+.doel-foto {
+  width: 60px;
+  height: 60px;
+  object-fit: cover;
+  border-radius: 10px;
+  flex-shrink: 0;
+  border: 1px solid var(--line);
+}
 .doel-row .naam { font-weight: 700; }
 .doel-row .omschrijving { color: var(--muted); font-size: 15px; }
 .doel-row .bedrag { font-weight: 800; color: var(--rotary-blue); font-size: 20px; white-space: nowrap; }
@@ -235,6 +248,7 @@ textarea { min-height: 90px; resize: vertical; }
 .btn-danger { background: #b23b3b; }
 .btn-danger:hover { background: #922f2f; }
 .btn-sm { padding: 7px 12px; font-size: 14px; }
+.btn-vol { width: 100%; }
 
 /* ---------- Inklapbaar beheer-blok ---------- */
 .beheer-inklap {
@@ -254,6 +268,36 @@ textarea { min-height: 90px; resize: vertical; }
 .beheer-inklap > summary::-webkit-details-marker { display: none; }
 .beheer-inklap > summary::before { content: '▸  '; color: var(--muted); }
 .beheer-inklap[open] > summary::before { content: '▾  '; }
+
+/* ---------- Loten per deelnemer (inklapbaar) ---------- */
+.loten-persoon {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  box-shadow: var(--shadow);
+  margin-bottom: 10px;
+}
+.loten-persoon > summary {
+  cursor: pointer;
+  list-style: none;
+  padding: 13px 16px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 700;
+}
+.loten-persoon > summary::-webkit-details-marker { display: none; }
+.loten-persoon > summary::before { content: '▸'; color: var(--muted); font-weight: 400; }
+.loten-persoon[open] > summary::before { content: '▾'; }
+.loten-persoon-naam { flex: 1; }
+.loten-lijst { padding: 0 16px 8px; }
+.lot-regel {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 9px 0;
+  border-top: 1px solid var(--line);
+}
 
 /* ---------- Tables ---------- */
 .table-wrap { overflow-x: auto; }
@@ -334,6 +378,34 @@ table.data th { color: var(--muted); font-size: 13px; text-transform: uppercase;
   border-left: 2px dashed rgba(30, 41, 59, 0.5);
 }
 .doelmeter-hint { margin-top: 8px; font-size: 13px; color: var(--muted); }
+
+/* Voorbij het doel: bewegende glans over het gouden 'bonus'-deel */
+.doelmeter-glans {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: 0;
+  z-index: 2;
+  pointer-events: none;
+  border-radius: 999px;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.6), transparent);
+  background-size: 60% 100%;
+  background-repeat: no-repeat;
+  animation: glansSweep 2.4s ease-in-out infinite;
+}
+@keyframes glansSweep {
+  0% { background-position: -70% 0; }
+  100% { background-position: 170% 0; }
+}
+.doelmeter-legenda {
+  display: inline-block;
+  width: 11px;
+  height: 11px;
+  border-radius: 3px;
+  vertical-align: -1px;
+}
+.doelmeter-legenda.groen { background: #1f9d55; }
+.doelmeter-legenda.goud { background: #f4a416; }
 .doelmeter-doel {
   margin: -2px 0 12px;
   font-size: 15px;
@@ -356,6 +428,50 @@ table.data th { color: var(--muted); font-size: 13px; text-transform: uppercase;
 @keyframes meterShine {
   0% { background-position: 0% 0; }
   100% { background-position: 200% 0; }
+}
+
+/* ---------- Stappen-uitleg (meedoen) ---------- */
+.stappen {
+  list-style: none;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 0;
+  margin: 0 0 18px;
+}
+.stappen li {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  text-align: center;
+  width: 100px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted);
+}
+.stap-icon {
+  width: 52px;
+  height: 52px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #eef3fb;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 1px var(--line);
+  color: var(--rotary-blue);
+}
+.stap-icon svg { display: block; }
+.stap-num {
+  color: var(--rotary-blue);
+  font-weight: 800;
+}
+.stappen li.actief { color: var(--ink); font-weight: 700; }
+.stappen li.actief .stap-icon {
+  background: var(--rotary-blue);
+  color: #fff;
+  box-shadow: 0 4px 10px rgba(23, 69, 143, 0.28);
 }
 
 /* ---------- Bundelkeuze ---------- */
@@ -402,6 +518,14 @@ table.data th { color: var(--muted); font-size: 13px; text-transform: uppercase;
   background: #fff;
   padding: 10px;
 }
+.betaal-eyebrow {
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--rotary-azure);
+}
+
 /* Betaalknop (CTA) — opent het bank-betaalverzoek */
 .betaal-cta {
   display: flex;
@@ -498,11 +622,12 @@ table.data th { color: var(--muted); font-size: 13px; text-transform: uppercase;
   margin: 20px 0;
 }
 .lot-badge .nummer {
-  font-size: 64px;
+  font-size: clamp(32px, 9vw, 60px);
   font-weight: 900;
   color: var(--rotary-gold);
-  line-height: 1;
+  line-height: 1.15;
   margin: 8px 0;
+  word-break: break-word;
 }
 .lot-badge small { color: #cdd9ef; }
 
@@ -562,6 +687,16 @@ table.data th { color: var(--muted); font-size: 13px; text-transform: uppercase;
 }
 .trekking-naam.reveal { animation: trekPop .55s ease .05s both; }
 .trekking-actions { margin-top: 12px; }
+.trekking-herkans {
+  margin-top: 14px;
+  background: transparent;
+  border: none;
+  color: #b9caea;
+  font-size: 14px;
+  text-decoration: underline;
+  cursor: pointer;
+}
+.trekking-herkans:hover { color: #fff; }
 .trekking-sluit {
   position: absolute;
   top: 14px;
@@ -580,6 +715,14 @@ table.data th { color: var(--muted); font-size: 13px; text-transform: uppercase;
   0% { transform: scale(.5); opacity: 0; }
   60% { transform: scale(1.12); }
   100% { transform: scale(1); opacity: 1; }
+}
+
+.trekking-hoofdprijs {
+  padding: 11px 13px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #f7f9fc;
+  font-size: 16px;
 }
 
 /* ---------- Draw / winnaar trekken ---------- */
@@ -607,10 +750,62 @@ table.data th { color: var(--muted); font-size: 13px; text-transform: uppercase;
   border-top: 1px solid var(--line);
   color: var(--muted);
   font-size: 14px;
+  text-align: center;
 }
-.site-footer .footer-note { font-style: italic; margin-top: 6px; max-width: 60ch; }
+.site-footer .footer-note { font-style: italic; margin: 6px auto 0; max-width: 60ch; }
 
 @media (max-width: 600px) {
-  .hero { padding: 28px 22px; }
-  .site-nav a { padding: 7px 11px; font-size: 14px; }
+  .header-inner {
+    flex-wrap: wrap;
+    justify-content: center;
+    min-height: 0;
+    padding: 10px 0 8px;
+    gap: 6px;
+  }
+  .site-nav { width: 100%; justify-content: center; gap: 4px; }
+  .site-nav a { padding: 7px 12px; font-size: 14px; }
+  .hero { padding: 24px 20px; }
+  .hero h1 { font-size: 26px; }
+  .panel { padding: 18px; }
+  .stappen { gap: 4px; }
+  .stappen li { width: 92px; font-size: 12px; }
+
+  /* Beheer: brede tabellen worden kaartjes i.p.v. horizontaal scrollen */
+  .table-wrap { overflow-x: visible; }
+  table.data,
+  table.data tbody,
+  table.data tfoot,
+  table.data tr,
+  table.data td {
+    display: block;
+    width: 100%;
+  }
+  table.data thead { display: none; }
+  table.data tr {
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 12px 14px;
+    margin-bottom: 10px;
+    background: #fff;
+    box-shadow: var(--shadow);
+  }
+  table.data td {
+    border: none;
+    padding: 3px 0;
+    white-space: normal;
+  }
+  table.data td:first-child {
+    font-weight: 700;
+    font-size: 16px;
+    padding-bottom: 6px;
+  }
+  table.data tfoot tr { background: #f3f6fb; }
+
+  /* Beheer: formuliervelden onder elkaar, knoppen volle breedte */
+  .inline-form { gap: 12px; }
+  .inline-form > div { min-width: 100%; }
+  .inline-form > button,
+  .inline-form > .btn { width: 100%; }
+
+  h1 { font-size: 28px; }
 }

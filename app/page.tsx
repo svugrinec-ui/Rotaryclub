@@ -74,6 +74,11 @@ export default async function HomePage() {
                 <div className="card-body">
                   <span className="maand">{datumLabel(w.maand)}</span>
                   <h3>{w.experience_titel}</h3>
+                  {w.aanbieder && (
+                    <div className="muted" style={{ fontSize: 14 }}>
+                      Aangeboden door {w.aanbieder}
+                    </div>
+                  )}
                   <div className="winnaar">Gewonnen door {w.naam}</div>
                   {w.toelichting && (
                     <p className="toelichting">{w.toelichting}</p>

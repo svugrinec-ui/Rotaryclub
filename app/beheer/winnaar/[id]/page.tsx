@@ -56,17 +56,11 @@ export default async function WinnaarBewerkPage({
           required
         />
 
+        <label>Aangeboden door (optioneel)</label>
+        <input name="aanbieder" type="text" defaultValue={w.aanbieder ?? ''} />
+
         <label>Datum trekking</label>
         <input name="maand" type="date" defaultValue={w.maand.slice(0, 10)} required />
-
-        <label>Opbrengst deze week (€)</label>
-        <input
-          name="opbrengst"
-          type="number"
-          step="0.01"
-          min="0"
-          defaultValue={Number(w.opbrengst ?? 0)}
-        />
 
         <label>Toelichting (optioneel)</label>
         <textarea name="toelichting" defaultValue={w.toelichting ?? ''} />

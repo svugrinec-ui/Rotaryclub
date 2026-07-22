@@ -2,7 +2,8 @@
 
 import { useState } from 'react';
 import { euro } from '@/lib/format';
-import { BUNDELS, BETAAL_QR_ALGEMEEN, bundelVoorBedrag } from '@/lib/bundels';
+import { BUNDELS, bundelVoorBedrag } from '@/lib/bundels';
+import { IconLock } from '@/components/Icons';
 
 interface Props {
   rondeId: string;
@@ -14,35 +15,77 @@ interface Toegekend {
   bedrag: number;
 }
 
-type Stap = 'gegevens' | 'betalen' | 'klaar';
+const STAP_ICONEN: Record<number, React.ReactNode> = {
+  1: (
+    <>
+      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+      <circle cx="12" cy="7" r="4" />
+    </>
+  ),
+  2: (
+    <>
+      <path d="M2 9a3 3 0 1 1 0 6v2a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-2a3 3 0 1 1 0-6V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2Z" />
+      <path d="M13 5v2" />
+      <path d="M13 11v2" />
+      <path d="M13 17v2" />
+    </>
+  ),
+  3: (
+    <>
+      <rect x="2" y="5" width="20" height="14" rx="2" />
+      <path d="M2 10h20" />
+    </>
+  ),
+};
+const STAP_LABELS: Record<number, string> = {
+  1: 'Naam & bundel',
+  2: 'Je loten',
+  3: 'Betalen',
+};
+
+function Stappen({ actief }: { actief: 1 | 2 | 3 }) {
+  return (
+    <ol className="stappen">
+      {[1, 2, 3].map((n) => (
+        <li key={n} className={actief === n ? 'actief' : ''}>
+          <span className="stap-icon">
+            <svg
+              viewBox="0 0 24 24"
+              width="24"
+              height="24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={1.75}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              {STAP_ICONEN[n]}
+            </svg>
+          </span>
+          <span>
+            <span className="stap-num">{n}.</span> {STAP_LABELS[n]}
+          </span>
+        </li>
+      ))}
+    </ol>
+  );
+}
 
 export default function MeedoenForm({ rondeId }: Props) {
-  const [stap, setStap] = useState<Stap>('gegevens');
   const [naam, setNaam] = useState('');
   const [bedrag, setBedrag] = useState<number>(BUNDELS[0]?.bedrag ?? 5);
-  const [betaald, setBetaald] = useState(false);
-  const [imgFout, setImgFout] = useState(false);
   const [bezig, setBezig] = useState(false);
   const [fout, setFout] = useState<string | null>(null);
   const [resultaat, setResultaat] = useState<Toegekend | null>(null);
 
-  const bundel = bundelVoorBedrag(bedrag);
-  const qrSrc = bundel?.qr ?? BETAAL_QR_ALGEMEEN;
-
-  function naarBetalen(e: React.FormEvent) {
+  async function submit(e: React.FormEvent) {
     e.preventDefault();
     setFout(null);
     if (!naam.trim()) {
       setFout('Vul je naam in.');
       return;
     }
-    setBetaald(false);
-    setImgFout(false);
-    setStap('betalen');
-  }
-
-  async function toonLoten() {
-    setFout(null);
     setBezig(true);
     try {
       const res = await fetch('/api/loten', {
@@ -58,7 +101,6 @@ export default function MeedoenForm({ rondeId }: Props) {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Er ging iets mis.');
       setResultaat({ nummers: data.nummers, naam: naam.trim(), bedrag: data.bedrag });
-      setStap('klaar');
     } catch (err) {
       setFout(err instanceof Error ? err.message : 'Onbekende fout.');
     } finally {
@@ -70,126 +112,79 @@ export default function MeedoenForm({ rondeId }: Props) {
     setResultaat(null);
     setNaam('');
     setBedrag(BUNDELS[0]?.bedrag ?? 5);
-    setBetaald(false);
-    setImgFout(false);
-    setStap('gegevens');
   }
 
-  // ---------- Stap 3: loten getoond ----------
-  if (stap === 'klaar' && resultaat) {
+  // ---------- Resultaat: eerst de loten, dan betalen ----------
+  if (resultaat) {
+    const bundel = bundelVoorBedrag(resultaat.bedrag);
     return (
-      <div className="lot-badge">
-        <small>
-          Gelukt, {resultaat.naam}! Je {resultaat.nummers.length} lot
-          {resultaat.nummers.length > 1 ? 'nummers' : 'nummer'}:
-        </small>
-        <div className="nummer">{resultaat.nummers.join(' · ')}</div>
-        <small>
-          Bedankt voor je bijdrage van {euro(resultaat.bedrag)}! Je doet nu
-          meteen mee met de trekking. Succes! 🍀
-        </small>
-        <div style={{ marginTop: 18 }}>
+      <>
+        <Stappen actief={2} />
+
+        <div className="lot-badge">
+          <small>
+            Gelukt, {resultaat.naam}! Je {resultaat.nummers.length} lot
+            {resultaat.nummers.length > 1 ? 'nummers' : 'nummer'}:
+          </small>
+          <div className="nummer">{resultaat.nummers.join(' · ')}</div>
+          <small>Je doet mee met de trekking — bij het trekken roepen we ook de naam om.</small>
+        </div>
+
+        <div className="panel" style={{ textAlign: 'center', marginTop: 28 }}>
+          <div className="betaal-eyebrow">Stap 3 · Betalen</div>
+          <h3 style={{ marginTop: 4 }}>Nu betalen: {euro(resultaat.bedrag)}</h3>
+
+          {bundel?.zelfBedrag && (
+            <div className="notice notice-info">
+              Bij deze betaling vul je zélf het bedrag in — vul{' '}
+              <strong>{euro(resultaat.bedrag)}</strong> in je bank-app in.
+            </div>
+          )}
+
+          {bundel?.betaalLink ? (
+            <a
+              className="betaal-cta"
+              href={bundel.betaalLink}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              <span className="betaal-cta-main">
+                <IconLock size={18} />
+                Betaal {euro(resultaat.bedrag)} via je bank
+                <span className="betaal-cta-arrow" aria-hidden>→</span>
+              </span>
+              <span className="betaal-cta-sub">
+                Opent in een nieuw tabblad — iDEAL / je bank-app
+              </span>
+            </a>
+          ) : (
+            <div className="notice notice-info">
+              Betaal {euro(resultaat.bedrag)} via de bekende QR-code of vraag de
+              commissie.
+            </div>
+          )}
+
+          <div className="betaal-veilig">
+            <IconLock size={13} /> Veilig betalen via Rabobank-betaalverzoek
+          </div>
+        </div>
+
+        <div style={{ textAlign: 'center', marginTop: 8 }}>
           <button className="btn btn-gold" onClick={opnieuw}>
             Nog iemand inschrijven
           </button>
         </div>
-      </div>
+      </>
     );
   }
 
-  // ---------- Stap 2: betalen ----------
-  if (stap === 'betalen') {
-    return (
-      <div className="panel">
-        {fout && <div className="notice notice-err">{fout}</div>}
-
-        <h3 style={{ marginTop: 0 }}>
-          Betaal {euro(bedrag)} — {bundel?.loten} loten
-        </h3>
-        <p className="muted" style={{ marginTop: 0 }}>
-          Tik op de knop om veilig te betalen via je eigen bank. Vink daarna aan dat
-          het gelukt is — dan zie je je lotnummers.
-        </p>
-
-        {bundel?.zelfBedrag && (
-          <div className="notice notice-info">
-            Bij deze betaling vul je zélf het bedrag in — vul{' '}
-            <strong>{euro(bedrag)}</strong> in je bank-app in.
-          </div>
-        )}
-
-        {bundel?.betaalLink ? (
-          <a
-            className="betaal-cta"
-            href={bundel.betaalLink}
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <span className="betaal-cta-main">
-              <span className="betaal-cta-lock" aria-hidden>🔒</span>
-              Betaal {euro(bedrag)} via je bank
-              <span className="betaal-cta-arrow" aria-hidden>→</span>
-            </span>
-            <span className="betaal-cta-sub">
-              Opent iDEAL / je bank-app in een nieuw tabblad
-            </span>
-          </a>
-        ) : (
-          <div className="notice notice-info">
-            Betaallink is nog niet ingesteld. Betaal {euro(bedrag)} via de bekende
-            QR-code of vraag de commissie.
-          </div>
-        )}
-
-        <div className="betaal-veilig">
-          <span aria-hidden>🔒</span> Veilig betalen via Rabobank-betaalverzoek
-        </div>
-
-        {qrSrc && !imgFout && (
-          <details className="betaal-scan">
-            <summary>Op een computer? Scan met je telefoon</summary>
-            <div className="betaal-qr">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={qrSrc}
-                alt={`Betaal-QR voor ${euro(bedrag)}`}
-                onError={() => setImgFout(true)}
-              />
-            </div>
-          </details>
-        )}
-
-        <label className="betaal-check">
-          <input
-            type="checkbox"
-            checked={betaald}
-            onChange={(e) => setBetaald(e.target.checked)}
-          />
-          <span>
-            Ik heb <strong>{euro(bedrag)}</strong> betaald
-          </span>
-        </label>
-
-        <div className="row-actions" style={{ marginTop: 16 }}>
-          <button
-            className="btn btn-ghost"
-            onClick={() => setStap('gegevens')}
-            disabled={bezig}
-          >
-            ← Terug
-          </button>
-          <button className="btn" onClick={toonLoten} disabled={!betaald || bezig}>
-            {bezig ? 'Bezig…' : 'Toon mijn loten'}
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  // ---------- Stap 1: gegevens + bundel ----------
+  // ---------- Formulier: naam + bundel ----------
   return (
-    <form className="panel" onSubmit={naarBetalen}>
-      {fout && <div className="notice notice-err">{fout}</div>}
+    <>
+      <Stappen actief={1} />
+
+      <form className="panel" onSubmit={submit}>
+        {fout && <div className="notice notice-err">{fout}</div>}
 
       <label htmlFor="naam">Je naam</label>
       <input
@@ -218,11 +213,12 @@ export default function MeedoenForm({ rondeId }: Props) {
         ))}
       </div>
 
-      <div style={{ marginTop: 18 }}>
-        <button className="btn" type="submit">
-          Naar betalen →
-        </button>
-      </div>
-    </form>
+        <div style={{ marginTop: 18 }}>
+          <button className="btn btn-groot btn-vol" type="submit" disabled={bezig}>
+            {bezig ? 'Bezig…' : 'Naar mijn loten →'}
+          </button>
+        </div>
+      </form>
+    </>
   );
 }

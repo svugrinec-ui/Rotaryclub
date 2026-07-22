@@ -75,18 +75,24 @@ export default async function GoedeDoelenPage() {
         ) : (
           doelen.map((d) => (
             <div className="doel-row" key={d.id}>
-              <div className="stack">
-                <span className="naam">
-                  {d.naam}
-                  {d.maand ? (
-                    <span className="muted"> · {maandLabel(d.maand)}</span>
-                  ) : d.jaar ? (
-                    <span className="muted"> · {d.jaar}</span>
-                  ) : null}
-                </span>
-                {d.omschrijving && (
-                  <span className="omschrijving">{d.omschrijving}</span>
+              <div className="doel-row-left">
+                {d.foto_url && (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img className="doel-foto" src={d.foto_url} alt="" />
                 )}
+                <div className="stack">
+                  <span className="naam">
+                    {d.naam}
+                    {d.maand ? (
+                      <span className="muted"> · {maandLabel(d.maand)}</span>
+                    ) : d.jaar ? (
+                      <span className="muted"> · {d.jaar}</span>
+                    ) : null}
+                  </span>
+                  {d.omschrijving && (
+                    <span className="omschrijving">{d.omschrijving}</span>
+                  )}
+                </div>
               </div>
               {Number(d.opbrengst) > 0 && (
                 <div className="bedrag">{euro(Number(d.opbrengst))}</div>
@@ -113,7 +119,7 @@ export default async function GoedeDoelenPage() {
                 </tr>
               </thead>
               <tbody>
-                {weken.map(({ w, bedrag, cumulatief }) => (
+                {[...weken].reverse().map(({ w, bedrag, cumulatief }) => (
                   <tr key={w.id}>
                     <td>{datumLabel(w.maand)}</td>
                     <td>{w.experience_titel}</td>

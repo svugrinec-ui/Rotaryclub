@@ -4,6 +4,7 @@ import { serviceClient } from '@/lib/supabase';
 import { euro, maandLabel, datumLabel } from '@/lib/format';
 import { BUNDELS } from '@/lib/bundels';
 import ConfirmButton from '@/components/ConfirmButton';
+import { IconTrophy } from '@/components/Icons';
 import type { Ronde, Doel, Winnaar } from '@/lib/types';
 import {
   login,
@@ -14,7 +15,6 @@ import {
   maakDoel,
   wijzigDoel,
   verwijderDoel,
-  maakWinnaar,
   zetWinnaarPublicatie,
   zetWeekOpbrengst,
   verwijderWinnaar,
@@ -64,8 +64,8 @@ export default async function BeheerPage({
       sb
         .from('doelen')
         .select('*')
-        .order('sort', { ascending: true })
-        .order('created_at', { ascending: true }),
+        .order('maand', { ascending: false, nullsFirst: false })
+        .order('created_at', { ascending: false }),
       sb.from('winnaars').select('*').order('maand', { ascending: false }),
     ]);
 
@@ -74,8 +74,8 @@ export default async function BeheerPage({
   const winnaars = (winnaarsData as Winnaar[] | null) ?? [];
   const vandaag = new Date().toISOString().slice(0, 10);
   const dezeMaand = vandaag.slice(0, 8) + '01';
-  // Ronde voor de snelknop: de open ronde, anders de meest recente.
-  const trekkingRonde = rondes.find((r) => r.status === 'open') ?? rondes[0];
+  // Snelknop trekking hoort bij een lopende (open) loterijronde.
+  const openRonde = rondes.find((r) => r.status === 'open') ?? null;
 
   return (
     <>
@@ -100,15 +100,24 @@ export default async function BeheerPage({
         </div>
       </div>
 
-      {/* ---------- Snelknop: live trekking ---------- */}
-      {trekkingRonde && (
+      {/* ---------- Snelknop: live trekking (alleen bij een open ronde) ---------- */}
+      {openRonde ? (
         <Link
           className="btn btn-gold btn-groot"
-          href={`/beheer/ronde/${trekkingRonde.id}/trekking`}
+          href={`/beheer/ronde/${openRonde.id}/trekking`}
           style={{ display: 'flex', width: '100%', marginTop: 18, justifyContent: 'center' }}
         >
-          🎉 Start trekking — {trekkingRonde.naam}
+          <IconTrophy size={20} /> Start trekking — {openRonde.naam}
         </Link>
+      ) : (
+        <button
+          className="btn btn-gold btn-groot"
+          disabled
+          style={{ display: 'flex', width: '100%', marginTop: 18, justifyContent: 'center' }}
+          title="Open eerst een loterijronde om te trekken"
+        >
+          <IconTrophy size={20} /> Start trekking — geen open ronde
+        </button>
       )}
 
       {/* ---------- Rondes ---------- */}
@@ -157,7 +166,7 @@ export default async function BeheerPage({
                           className="btn btn-ghost btn-sm"
                           href={`/beheer/ronde/${r.id}/trekking`}
                         >
-                          🎉 Trekking
+<IconTrophy size={15} /> Trekking
                         </Link>
                         {r.status !== 'open' && (
                           <form action={zetRondeStatus}>
@@ -177,7 +186,7 @@ export default async function BeheerPage({
                           <input type="hidden" name="id" value={r.id} />
                           <ConfirmButton
                             className="btn btn-danger btn-sm"
-                            message={`Ronde "${r.naam}" verwijderen? De loten en experiences van deze ronde gaan mee. Gepubliceerde winnaars blijven staan.`}
+                            message={`Ronde "${r.naam}" verwijderen? De loten, experiences én de winnaar van deze ronde (incl. de opbrengst in het overzicht) gaan mee.`}
                           >
                             Verwijder
                           </ConfirmButton>
@@ -196,134 +205,40 @@ export default async function BeheerPage({
           <div className="inline-form">
             <div>
               <label htmlFor="r-naam">Naam</label>
-              <input id="r-naam" name="naam" type="text" placeholder="Juli 2026" required />
+              <input id="r-naam" name="naam" type="text" placeholder="Rotary avond" required />
             </div>
             <div>
-              <label htmlFor="r-maand">Maand</label>
+              <label htmlFor="r-maand">Datum</label>
               <input id="r-maand" name="maand" type="date" defaultValue={dezeMaand} required />
             </div>
+          </div>
+          <div className="inline-form">
+            <div>
+              <label htmlFor="r-exp">Hoofdprijs (experience)</label>
+              <input
+                id="r-exp"
+                name="experience"
+                type="text"
+                placeholder="Onvergetelijke ervaring"
+                required
+              />
+            </div>
+            <div>
+              <label htmlFor="r-aanb">Aangeboden door</label>
+              <input id="r-aanb" name="aanbieder" type="text" placeholder="Rotarian" required />
+            </div>
+          </div>
+          <div style={{ marginTop: 14 }}>
             <button className="btn" type="submit">
               Ronde toevoegen
             </button>
           </div>
           <p className="muted" style={{ marginBottom: 0 }}>
-            Bundels: {BUNDELS.map((b) => `${euro(b.bedrag)} = ${b.loten} loten`).join(' · ')}.
-            Aanpassen kan in <code>lib/bundels.ts</code>.
+            Elke ronde gebruikt dezelfde lotbundels:{' '}
+            {BUNDELS.map((b) => `${euro(b.bedrag)} = ${b.loten} loten`).join(' · ')}.
           </p>
         </form>
       </section>
-
-      {/* ---------- Goede doelen ---------- */}
-      <section>
-        <div className="section-head">
-          <h2>Goede doelen</h2>
-          <span className="sub">Waar het geld per maand naartoe gaat</span>
-        </div>
-
-        {doelen.map((d) => (
-          <form className="panel" action={wijzigDoel} key={d.id}>
-            <input type="hidden" name="id" value={d.id} />
-            <div className="inline-form">
-              <div>
-                <label>Naam</label>
-                <input name="naam" type="text" defaultValue={d.naam} required />
-              </div>
-              <div>
-                <label>Maand</label>
-                <input name="maand" type="date" defaultValue={d.maand?.slice(0, 10) ?? ''} />
-              </div>
-            </div>
-            <label>Omschrijving</label>
-            <input name="omschrijving" type="text" defaultValue={d.omschrijving ?? ''} />
-            <input type="hidden" name="jaar" value={d.jaar ?? ''} />
-            <div className="row-actions" style={{ marginTop: 14 }}>
-              <button className="btn btn-sm" type="submit">
-                Opslaan
-              </button>
-              <button className="btn btn-danger btn-sm" formAction={verwijderDoel}>
-                Verwijderen
-              </button>
-            </div>
-          </form>
-        ))}
-
-        <form className="panel" action={maakDoel}>
-          <h3 style={{ marginTop: 0 }}>Nieuw goed doel</h3>
-          <div className="inline-form">
-            <div>
-              <label>Naam</label>
-              <input name="naam" type="text" required />
-            </div>
-            <div>
-              <label>Maand</label>
-              <input name="maand" type="date" defaultValue={dezeMaand} />
-            </div>
-          </div>
-          <label>Omschrijving</label>
-          <input name="omschrijving" type="text" placeholder="Korte toelichting op het doel (optioneel)" />
-          <input type="hidden" name="jaar" value={new Date().getFullYear()} />
-          <div style={{ marginTop: 14 }}>
-            <button className="btn" type="submit">
-              Doel toevoegen
-            </button>
-          </div>
-        </form>
-      </section>
-
-      {/* ---------- Opbrengst per week (handmatig, ingeklapt) ---------- */}
-      <details className="beheer-inklap">
-        <summary>Opbrengst per week — handmatig bijstellen</summary>
-        <p className="muted" style={{ marginTop: 10 }}>
-          De opbrengst per ronde wordt automatisch berekend uit de betalingen (zie
-          “Opbrengst deze ronde” bij een ronde). Dit blok is alleen om de publieke
-          “Opbouw per week” met de hand bij te stellen. Totaal nu:{' '}
-          {euro(winnaars.reduce((s, w) => s + Number(w.opbrengst ?? 0), 0))}.
-        </p>
-        {winnaars.length === 0 ? (
-          <div className="empty">
-            Nog geen weken. Leg eerst een winnaar vast; daar hoort de weekopbrengst bij.
-          </div>
-        ) : (
-          <div className="table-wrap">
-            <table className="data">
-              <thead>
-                <tr>
-                  <th>Datum</th>
-                  <th>Experience</th>
-                  <th>Opbrengst (€)</th>
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody>
-                {[...winnaars]
-                  .sort((a, b) => a.maand.localeCompare(b.maand))
-                  .map((w) => (
-                    <tr key={w.id}>
-                      <td>{datumLabel(w.maand)}</td>
-                      <td>{w.experience_titel}</td>
-                      <td colSpan={2}>
-                        <form action={zetWeekOpbrengst} className="inline-form">
-                          <input type="hidden" name="id" value={w.id} />
-                          <input
-                            name="opbrengst"
-                            type="number"
-                            step="0.01"
-                            min="0"
-                            defaultValue={Number(w.opbrengst ?? 0)}
-                            style={{ maxWidth: 140 }}
-                          />
-                          <button className="btn btn-sm" type="submit">
-                            Opslaan
-                          </button>
-                        </form>
-                      </td>
-                    </tr>
-                  ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </details>
 
       {/* ---------- Winnaars ---------- */}
       <section>
@@ -384,38 +299,134 @@ export default async function BeheerPage({
           </div>
         )}
 
-        <form className="panel" action={maakWinnaar}>
-          <h3 style={{ marginTop: 0 }}>Winnaar toevoegen</h3>
-          <p className="muted" style={{ marginTop: 0 }}>
-            Tip: vanuit een ronde kun je de winnaar automatisch laten trekken.
-          </p>
+        <p className="muted">
+          Winnaars komen automatisch uit de{' '}
+          <span style={{ fontWeight: 600 }}>presentatie-trekking</span>. Hier beheer
+          je ze: publiceren/verbergen, foto toevoegen (Bewerk) of verwijderen.
+        </p>
+      </section>
+
+      {/* ---------- Goede doelen (ingeklapt) ---------- */}
+      <details className="beheer-inklap">
+        <summary>Goede doelen — waar het geld per maand naartoe gaat</summary>
+        <div style={{ marginTop: 6 }} />
+
+        <form className="panel" action={maakDoel}>
+          <h3 style={{ marginTop: 0 }}>Nieuw goed doel</h3>
           <div className="inline-form">
             <div>
-              <label>Naam winnaar</label>
+              <label>Naam</label>
               <input name="naam" type="text" required />
             </div>
             <div>
-              <label>Datum trekking</label>
-              <input name="maand" type="date" defaultValue={vandaag} required />
-            </div>
-            <div>
-              <label>Opbrengst deze week (€)</label>
-              <input name="opbrengst" type="number" step="0.01" min="0" defaultValue={0} />
+              <label>Maand</label>
+              <input name="maand" type="month" defaultValue={dezeMaand.slice(0, 7)} />
             </div>
           </div>
-          <label>Experience</label>
-          <input name="experience_titel" type="text" placeholder="Golf Experience met Stephen" required />
-          <label>Toelichting (optioneel)</label>
-          <textarea name="toelichting" placeholder="Kort verhaaltje bij de foto" />
+          <label>Omschrijving</label>
+          <input name="omschrijving" type="text" placeholder="Korte toelichting op het doel (optioneel)" />
           <label>Foto (optioneel)</label>
           <input name="foto" type="file" accept="image/*" />
-          <div style={{ marginTop: 16 }}>
+          <input type="hidden" name="jaar" value={new Date().getFullYear()} />
+          <div style={{ marginTop: 14 }}>
             <button className="btn" type="submit">
-              Winnaar publiceren
+              Doel toevoegen
             </button>
           </div>
         </form>
-      </section>
+
+        {doelen.map((d) => (
+          <form className="panel" action={wijzigDoel} key={d.id}>
+            <input type="hidden" name="id" value={d.id} />
+            <div className="inline-form">
+              <div>
+                <label>Naam</label>
+                <input name="naam" type="text" defaultValue={d.naam} required />
+              </div>
+              <div>
+                <label>Maand</label>
+                <input name="maand" type="month" defaultValue={d.maand?.slice(0, 7) ?? ''} />
+              </div>
+            </div>
+            <label>Omschrijving</label>
+            <input name="omschrijving" type="text" defaultValue={d.omschrijving ?? ''} />
+            {d.foto_url && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={d.foto_url}
+                alt=""
+                style={{ width: 64, height: 64, objectFit: 'cover', borderRadius: 8, margin: '10px 0 0' }}
+              />
+            )}
+            <label>{d.foto_url ? 'Foto vervangen (optioneel)' : 'Foto toevoegen (optioneel)'}</label>
+            <input name="foto" type="file" accept="image/*" />
+            <input type="hidden" name="jaar" value={d.jaar ?? ''} />
+            <div className="row-actions" style={{ marginTop: 14 }}>
+              <button className="btn btn-sm" type="submit">
+                Opslaan
+              </button>
+              <button className="btn btn-danger btn-sm" formAction={verwijderDoel}>
+                Verwijderen
+              </button>
+            </div>
+          </form>
+        ))}
+      </details>
+
+      {/* ---------- Opbrengst per week (handmatig, ingeklapt) ---------- */}
+      <details className="beheer-inklap">
+        <summary>Opbrengst per week — handmatig bijstellen</summary>
+        <p className="muted" style={{ marginTop: 10 }}>
+          De opbrengst per ronde wordt automatisch berekend uit de betalingen (zie
+          “Opbrengst deze ronde” bij een ronde). Dit blok is alleen om de publieke
+          “Opbouw per week” met de hand bij te stellen. Totaal nu:{' '}
+          {euro(winnaars.reduce((s, w) => s + Number(w.opbrengst ?? 0), 0))}.
+        </p>
+        {winnaars.length === 0 ? (
+          <div className="empty">
+            Nog geen weken. Leg eerst een winnaar vast; daar hoort de weekopbrengst bij.
+          </div>
+        ) : (
+          <div className="table-wrap">
+            <table className="data">
+              <thead>
+                <tr>
+                  <th>Datum</th>
+                  <th>Experience</th>
+                  <th>Opbrengst (€)</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {[...winnaars]
+                  .sort((a, b) => b.maand.localeCompare(a.maand))
+                  .map((w) => (
+                    <tr key={w.id}>
+                      <td>{datumLabel(w.maand)}</td>
+                      <td>{w.experience_titel}</td>
+                      <td colSpan={2}>
+                        <form action={zetWeekOpbrengst} className="inline-form">
+                          <input type="hidden" name="id" value={w.id} />
+                          <input
+                            name="opbrengst"
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            defaultValue={Number(w.opbrengst ?? 0)}
+                            style={{ maxWidth: 140 }}
+                          />
+                          <button className="btn btn-sm" type="submit">
+                            Opslaan
+                          </button>
+                        </form>
+                      </td>
+                    </tr>
+                  ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </details>
     </>
   );
 }

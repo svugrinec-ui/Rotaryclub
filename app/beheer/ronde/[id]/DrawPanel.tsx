@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { maakWinnaar } from '@/lib/actions';
+import { IconTrophy } from '@/components/Icons';
 
 interface Props {
   rondeId: string;
@@ -51,7 +52,7 @@ export default function DrawPanel({ rondeId, datum, experiences }: Props) {
             Trek een willekeurige winnaar uit alle <strong>betaalde</strong> loten.
           </p>
           <button className="btn btn-gold" onClick={trek} disabled={bezig}>
-            {bezig ? 'Bezig…' : '🎉 Trek winnaar'}
+            {bezig ? 'Bezig…' : <><IconTrophy size={17} /> Trek winnaar</>}
           </button>
         </>
       )}

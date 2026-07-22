@@ -6,12 +6,12 @@ import { euro, maandLabel } from '@/lib/format';
 import type { Ronde, Experience, Lot } from '@/lib/types';
 import {
   maakExperience,
+  wijzigExperience,
   verwijderExperience,
   zetBetaald,
   verwijderLot,
   zetRondeStatus,
 } from '@/lib/actions';
-import DrawPanel from './DrawPanel';
 
 export const dynamic = 'force-dynamic';
 
@@ -56,6 +56,17 @@ export default async function RondeBeheerPage({
   }
   const perPersoon = Object.values(perPersoonMap).sort((a, b) => b.bedrag - a.bedrag);
 
+  // Loten per deelnemer (voor de inklapbare loten-lijst).
+  const lotenPerPersoonMap: Record<string, Lot[]> = {};
+  for (const l of loten) (lotenPerPersoonMap[l.naam] ??= []).push(l);
+  const deelnemers = Object.entries(lotenPerPersoonMap)
+    .map(([naam, ls]) => ({
+      naam,
+      loten: [...ls].sort((a, b) => a.lotnummer - b.lotnummer),
+      betaald: ls.filter((l) => l.betaald).length,
+    }))
+    .sort((a, b) => a.naam.localeCompare(b.naam));
+
   return (
     <>
       <p style={{ marginTop: 20 }}>
@@ -94,10 +105,61 @@ export default async function RondeBeheerPage({
         </div>
       </div>
 
+      {/* ---------- Loten ---------- */}
+      <section>
+        <div className="section-head">
+          <h2>Loten</h2>
+          <span className="sub">
+            {loten.length} totaal · {betaald.length} betaald · {open} open
+          </span>
+        </div>
+
+        {loten.length === 0 ? (
+          <div className="empty">Nog geen loten. Bezoekers schrijven zich in via /meedoen.</div>
+        ) : (
+          deelnemers.map((p) => (
+            <details className="loten-persoon" key={p.naam}>
+              <summary>
+                <span className="loten-persoon-naam">{p.naam}</span>
+                <span className="muted">
+                  {p.loten.length} {p.loten.length === 1 ? 'lot' : 'loten'}
+                  {p.betaald < p.loten.length ? ` · ${p.loten.length - p.betaald} open` : ''}
+                </span>
+              </summary>
+              <div className="loten-lijst">
+                {p.loten.map((l) => (
+                  <div className="lot-regel" key={l.id}>
+                    <strong>#{l.lotnummer}</strong>
+                    <span className={`pill ${l.betaald ? 'pill-ok' : 'pill-wait'}`}>
+                      {l.betaald ? 'Betaald' : 'Open'}
+                    </span>
+                    <div className="row-actions" style={{ marginLeft: 'auto' }}>
+                      <form action={zetBetaald}>
+                        <input type="hidden" name="id" value={l.id} />
+                        <input type="hidden" name="ronde_id" value={ronde.id} />
+                        <input type="hidden" name="betaald" value={(!l.betaald).toString()} />
+                        <button className={`btn btn-sm ${l.betaald ? 'btn-ghost' : ''}`}>
+                          {l.betaald ? 'Zet op open' : 'Afvinken'}
+                        </button>
+                      </form>
+                      <form action={verwijderLot}>
+                        <input type="hidden" name="id" value={l.id} />
+                        <input type="hidden" name="ronde_id" value={ronde.id} />
+                        <button className="btn btn-danger btn-sm">✕</button>
+                      </form>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </details>
+          ))
+        )}
+      </section>
+
       {/* ---------- Opbrengst deze ronde ---------- */}
       <section>
         <div className="section-head">
-          <h2>Opbrengst deze ronde</h2>
+          <h2>Opbrengsten</h2>
           <span className="sub">
             {euro(totaalOpbrengst)} · {betaald.length} betaalde loten ·{' '}
             {perPersoon.length} deelnemers
@@ -145,24 +207,37 @@ export default async function RondeBeheerPage({
           <span className="sub">Wat er te winnen is deze ronde</span>
         </div>
         {experiences.map((e) => (
-          <div className="doel-row" key={e.id}>
-            <div className="stack">
-              <span className="naam">{e.titel}</span>
-              {e.aanbieder && (
-                <span className="omschrijving">Aangeboden door {e.aanbieder}</span>
-              )}
-              {e.omschrijving && (
-                <span className="omschrijving">{e.omschrijving}</span>
-              )}
+          <form className="panel" action={wijzigExperience} key={e.id}>
+            <input type="hidden" name="id" value={e.id} />
+            <input type="hidden" name="ronde_id" value={ronde.id} />
+            <div className="inline-form">
+              <div>
+                <label>Titel</label>
+                <input name="titel" type="text" defaultValue={e.titel} required />
+              </div>
+              <div>
+                <label>Aanbieder</label>
+                <input name="aanbieder" type="text" defaultValue={e.aanbieder ?? ''} />
+              </div>
             </div>
-            <form action={verwijderExperience}>
-              <input type="hidden" name="id" value={e.id} />
-              <input type="hidden" name="ronde_id" value={ronde.id} />
-              <button className="btn btn-danger btn-sm">Verwijder</button>
-            </form>
-          </div>
+            <label>Omschrijving</label>
+            <input name="omschrijving" type="text" defaultValue={e.omschrijving ?? ''} />
+            <div className="row-actions" style={{ marginTop: 14 }}>
+              <button className="btn" type="submit">
+                Opslaan
+              </button>
+              <button
+                className="btn btn-danger btn-sm"
+                formAction={verwijderExperience}
+                formNoValidate
+              >
+                Verwijder
+              </button>
+            </div>
+          </form>
         ))}
 
+        {experiences.length === 0 && (
         <form className="panel" action={maakExperience}>
           <input type="hidden" name="ronde_id" value={ronde.id} />
           <h3 style={{ marginTop: 0 }}>Experience toevoegen</h3>
@@ -173,7 +248,7 @@ export default async function RondeBeheerPage({
             </div>
             <div>
               <label>Aanbieder</label>
-              <input name="aanbieder" type="text" placeholder="Lid" />
+              <input name="aanbieder" type="text" placeholder="Lid" required />
             </div>
           </div>
           <label>Omschrijving</label>
@@ -184,105 +259,6 @@ export default async function RondeBeheerPage({
             </button>
           </div>
         </form>
-      </section>
-
-      {/* ---------- Trekking ---------- */}
-      <section>
-        <div className="section-head">
-          <h2>Trekking</h2>
-          <span className="sub">
-            {betaald.length} betaalde loten doen mee
-          </span>
-        </div>
-
-        <div className="panel" style={{ textAlign: 'center' }}>
-          <p className="muted" style={{ marginTop: 0 }}>
-            Doe de trekking live op je telefoon: groot in beeld, meerdere prijzen,
-            hoofdprijs als climax.
-          </p>
-          <Link className="btn btn-gold btn-groot" href={`/beheer/ronde/${ronde.id}/trekking`}>
-            🎉 Start presentatie-trekking
-          </Link>
-        </div>
-
-        <details style={{ marginBottom: 20 }}>
-          <summary className="muted" style={{ cursor: 'pointer' }}>
-            Of trek snel één winnaar (zonder show)
-          </summary>
-          <div style={{ marginTop: 12 }}>
-            <DrawPanel
-              rondeId={ronde.id}
-              datum={new Date().toISOString().slice(0, 10)}
-              experiences={experiences.map((e) => e.titel)}
-            />
-          </div>
-        </details>
-      </section>
-
-      {/* ---------- Loten ---------- */}
-      <section>
-        <div className="section-head">
-          <h2>Loten</h2>
-          <span className="sub">
-            {loten.length} totaal · {betaald.length} betaald · {open} open
-          </span>
-        </div>
-
-        {loten.length === 0 ? (
-          <div className="empty">Nog geen loten. Bezoekers schrijven zich in via /meedoen.</div>
-        ) : (
-          <div className="table-wrap">
-            <table className="data">
-              <thead>
-                <tr>
-                  <th>Lot</th>
-                  <th>Naam</th>
-                  <th>Contact</th>
-                  <th>Betaald</th>
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody>
-                {loten.map((l) => (
-                  <tr key={l.id}>
-                    <td>
-                      <strong>#{l.lotnummer}</strong>
-                    </td>
-                    <td>{l.naam}</td>
-                    <td className="muted">{l.contact ?? '—'}</td>
-                    <td>
-                      <span className={`pill ${l.betaald ? 'pill-ok' : 'pill-wait'}`}>
-                        {l.betaald ? 'Betaald' : 'Open'}
-                      </span>
-                    </td>
-                    <td>
-                      <div className="row-actions">
-                        <form action={zetBetaald}>
-                          <input type="hidden" name="id" value={l.id} />
-                          <input type="hidden" name="ronde_id" value={ronde.id} />
-                          <input
-                            type="hidden"
-                            name="betaald"
-                            value={(!l.betaald).toString()}
-                          />
-                          <button
-                            className={`btn btn-sm ${l.betaald ? 'btn-ghost' : ''}`}
-                          >
-                            {l.betaald ? 'Zet op open' : 'Afvinken'}
-                          </button>
-                        </form>
-                        <form action={verwijderLot}>
-                          <input type="hidden" name="id" value={l.id} />
-                          <input type="hidden" name="ronde_id" value={ronde.id} />
-                          <button className="btn btn-danger btn-sm">✕</button>
-                        </form>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
         )}
       </section>
     </>

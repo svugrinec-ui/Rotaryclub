@@ -88,6 +88,9 @@ export async function POST(req: Request) {
         { status: 500 },
       );
     }
+    // Oplopend sorteren zodat de weergave altijd dezelfde volgorde heeft als
+    // het later opzoeken (dat ook oplopend sorteert).
+    nummers.sort((a, b) => a - b);
 
     // De bezoeker bevestigt "ik heb betaald" vóór dit punt, dus het lot doet
     // meteen mee met de trekking. De commissie kan dit later terugdraaien.

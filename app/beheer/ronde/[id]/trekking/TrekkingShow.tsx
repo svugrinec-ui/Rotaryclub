@@ -3,17 +3,23 @@
 import { useRef, useState } from 'react';
 import Link from 'next/link';
 import { maakWinnaar } from '@/lib/actions';
+import { IconTrophy } from '@/components/Icons';
 
 interface Lot {
   lotnummer: number;
   naam: string;
 }
 
+interface Experience {
+  titel: string;
+  aanbieder: string | null;
+}
+
 interface Props {
   rondeId: string;
   rondeNaam: string;
   datum: string;
-  experiences: string[];
+  experiences: Experience[];
   betaaldeLoten: Lot[];
 }
 
@@ -36,7 +42,9 @@ export default function TrekkingShow({
   const maxPrijzen = Math.max(1, Math.min(betaaldeLoten.length, 10));
 
   const [aantal, setAantal] = useState(Math.min(5, maxPrijzen));
-  const [hoofdprijs, setHoofdprijs] = useState(experiences[0] ?? 'Hoofdprijs');
+  // De hoofdprijs (experience + aanbieder) komt uit de ronde — niet bewerkbaar hier.
+  const hoofdprijs = experiences[0]?.titel ?? 'Hoofdprijs';
+  const aanbieder = experiences[0]?.aanbieder ?? '';
   const [fase, setFase] = useState<'setup' | 'show' | 'klaar'>('setup');
 
   // --- tijdens de show ---
@@ -104,6 +112,14 @@ export default function TrekkingShow({
     }
   }
 
+  // Winnaar accepteert niet: haal 'm uit de uitslag en trek opnieuw voor
+  // DEZELFDE prijs. Het geweigerde lot is al uit de pool, dus het komt niet terug.
+  function herkans() {
+    setWinnaars((prev) => prev.slice(0, -1));
+    setOnthuld(null);
+    setDisplay(null);
+  }
+
   function opnieuw() {
     if (timer.current) clearTimeout(timer.current);
     setFase('setup');
@@ -123,7 +139,13 @@ export default function TrekkingShow({
         </p>
         <h1>Trekking — {rondeNaam}</h1>
 
-        {betaaldeLoten.length === 0 ? (
+        {experiences.length === 0 ? (
+          <div className="notice notice-err">
+            Deze ronde heeft nog geen hoofdprijs (experience + aanbieder). Voeg die
+            eerst toe bij de{' '}
+            <Link href={`/beheer/ronde/${rondeId}`}>ronde</Link>.
+          </div>
+        ) : betaaldeLoten.length === 0 ? (
           <div className="notice notice-err">
             Er zijn nog geen betaalde loten om uit te trekken. Vink eerst betalingen af.
           </div>
@@ -162,26 +184,17 @@ export default function TrekkingShow({
               <p className="muted">Er zijn maar {maxPrijzen} deelnemers.</p>
             )}
 
-            <label>Hoofdprijs (experience)</label>
-            {experiences.length > 1 ? (
-              <select value={hoofdprijs} onChange={(e) => setHoofdprijs(e.target.value)}>
-                {experiences.map((t) => (
-                  <option key={t} value={t}>
-                    {t}
-                  </option>
-                ))}
-              </select>
-            ) : (
-              <input
-                type="text"
-                value={hoofdprijs}
-                onChange={(e) => setHoofdprijs(e.target.value)}
-              />
-            )}
+            <label>Hoofdprijs</label>
+            <div className="trekking-hoofdprijs">
+              <strong>{hoofdprijs}</strong>
+              {aanbieder && (
+                <span className="muted"> · aangeboden door {aanbieder}</span>
+              )}
+            </div>
 
             <div style={{ marginTop: 18 }}>
               <button className="btn btn-gold btn-groot" onClick={start}>
-                🎉 Start trekking
+                <IconTrophy size={20} /> Start trekking
               </button>
             </div>
           </div>
@@ -212,7 +225,15 @@ export default function TrekkingShow({
             <tbody>
               {winnaars.map((w, i) => (
                 <tr key={i}>
-                  <td>{w.hoofdprijs ? <strong>🏆 {w.prijs}</strong> : w.prijs}</td>
+                  <td>
+                    {w.hoofdprijs ? (
+                      <strong>
+                        <IconTrophy size={15} /> {w.prijs}
+                      </strong>
+                    ) : (
+                      w.prijs
+                    )}
+                  </td>
                   <td>#{w.lot.lotnummer}</td>
                   <td>{w.lot.naam}</td>
                 </tr>
@@ -234,8 +255,11 @@ export default function TrekkingShow({
             <input type="hidden" name="maand" value={datum} />
             <input type="hidden" name="naam" value={hoofd.lot.naam} />
             <input type="hidden" name="experience_titel" value={hoofdprijs} />
+            <input type="hidden" name="aanbieder" value={aanbieder} />
             <p className="muted" style={{ marginTop: 0 }}>
-              {hoofd.lot.naam} — {hoofdprijs}. Voeg eventueel een foto toe.
+              {hoofd.lot.naam} — {hoofdprijs}
+              {aanbieder ? ` (aangeboden door ${aanbieder})` : ''}. Voeg eventueel
+              een foto toe.
             </p>
             <label>Foto (optioneel)</label>
             <input name="foto" type="file" accept="image/*" />
@@ -261,7 +285,6 @@ export default function TrekkingShow({
 
   // ---------- Show: fullscreen onthulling ----------
   const huidige = prijzen[index];
-  const nummer = display ?? '—';
   return (
     <div className="trekking-overlay">
       <div className="trekking-ronde">{rondeNaam}</div>
@@ -270,15 +293,23 @@ export default function TrekkingShow({
         Prijs {index + 1} van {prijzen.length}
       </div>
       <div className={`trekking-prijs ${huidige?.hoofdprijs ? 'hoofd' : ''}`}>
-        {huidige?.hoofdprijs ? `🏆 ${huidige.label}` : huidige?.label}
+        {huidige?.hoofdprijs ? (
+          <>
+            <IconTrophy size={26} /> {huidige.label}
+          </>
+        ) : (
+          huidige?.label
+        )}
       </div>
 
       <div className={`trekking-nummer ${cycling ? 'cycling' : ''} ${onthuld ? 'reveal' : ''}`}>
-        {nummer === '—' ? '—' : `#${nummer}`}
+        {display === null ? ' ' : `#${display}`}
       </div>
 
       {onthuld ? (
-        <div className="trekking-naam reveal">🎉 {onthuld.naam}</div>
+        <div className="trekking-naam reveal">
+          <IconTrophy size={40} /> {onthuld.naam}
+        </div>
       ) : (
         <div className="trekking-naam placeholder">&nbsp;</div>
       )}
@@ -294,6 +325,12 @@ export default function TrekkingShow({
           </button>
         )}
       </div>
+
+      {onthuld && pool.length > 0 && (
+        <button className="trekking-herkans" onClick={herkans}>
+          Winnaar accepteert niet? Trek opnieuw voor deze prijs
+        </button>
+      )}
 
       <button className="trekking-sluit" onClick={opnieuw} aria-label="Sluiten">
         ✕

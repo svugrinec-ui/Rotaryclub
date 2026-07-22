@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
+import { IconSettings } from '@/components/Icons';
 import './globals.css';
 
 export const metadata: Metadata = {
@@ -25,16 +26,21 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               <Link href="/">Winnaars</Link>
               <Link href="/goede-doelen">Goede doelen</Link>
               <Link href="/meedoen">Meedoen</Link>
+              <Link
+                href="/beheer"
+                className="beheer-link"
+                title="Beheer"
+                aria-label="Beheer"
+              >
+                <IconSettings size={20} />
+              </Link>
             </nav>
           </div>
         </header>
         <main className="container">{children}</main>
         <footer className="site-footer">
           <div className="container">
-            <p>
-              Rotary Club Soest-Baarn · Loterijcommissie ·{' '}
-              <Link href="/beheer">Beheer</Link>
-            </p>
+            <p>Rotary Club Soest-Baarn · Loterijcommissie</p>
             <p className="footer-note">
               “De mooiste prijs zit niet in een fles wijn, maar in de tijd en
               aandacht die we met elkaar delen.”

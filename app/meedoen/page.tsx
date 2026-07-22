@@ -3,6 +3,7 @@ import { maandVoortgang, doelVoorMaand } from '@/lib/doel';
 import DoelMeter from '@/components/DoelMeter';
 import type { Ronde, Experience, Winnaar, Doel } from '@/lib/types';
 import MeedoenForm from './MeedoenForm';
+import LotenOpzoeken from './LotenOpzoeken';
 
 export const revalidate = 30;
 
@@ -53,9 +54,8 @@ export default async function MeedoenPage() {
           Doe mee — <span className="gold">{ronde.naam}</span>
         </h1>
         <p>
-          Schrijf je in voor de loterij van deze maand. Kies een bundel, betaal
-          via de bekende QR-code en vul hieronder je gegevens in — je krijgt
-          direct je lotnummers.
+          Vul je naam in en kies een bundel — je krijgt <strong>direct</strong> je
+          lotnummers. Daarna betaal je met één tik via je bank.
         </p>
       </section>
 
@@ -91,9 +91,10 @@ export default async function MeedoenPage() {
 
       <section>
         <div className="section-head">
-          <h2>Schrijf je in</h2>
+          <h2>Steun het goede doel</h2>
         </div>
         <MeedoenForm rondeId={ronde.id} />
+        <LotenOpzoeken />
       </section>
     </>
   );

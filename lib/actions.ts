@@ -3,6 +3,7 @@
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
+import type { SupabaseClient } from '@supabase/supabase-js';
 import { serviceClient } from '@/lib/supabase';
 import {
   ADMIN_COOKIE,
@@ -20,6 +21,38 @@ async function assertAdmin() {
 
 function str(fd: FormData, key: string): string {
   return (fd.get(key)?.toString() ?? '').trim();
+}
+
+/** Normaliseert een maand-invoer ("YYYY-MM" of een datum) naar de eerste van de maand. */
+function maandDatum(v: string): string | null {
+  return v ? `${v.slice(0, 7)}-01` : null;
+}
+
+/** Uploadt een foto naar de 'fotos'-bucket en geeft de publieke URL terug (of null). */
+async function uploadFoto(
+  sb: SupabaseClient,
+  foto: File,
+  prefix: string,
+): Promise<string | null> {
+  const ext = foto.name.split('.').pop()?.toLowerCase() || 'jpg';
+  const pad = `${prefix}/${crypto.randomUUID()}.${ext}`;
+  const bytes = new Uint8Array(await foto.arrayBuffer());
+  const { error } = await sb.storage
+    .from('fotos')
+    .upload(pad, bytes, { contentType: foto.type || 'image/jpeg', upsert: true });
+  if (error) return null;
+  return sb.storage.from('fotos').getPublicUrl(pad).data.publicUrl;
+}
+
+/** Som van de betaalde loten van een ronde = de opbrengst van die (week-)ronde. */
+async function rondeOpbrengst(rondeId: string): Promise<number> {
+  const { data } = await serviceClient()
+    .from('loten')
+    .select('bedrag')
+    .eq('ronde_id', rondeId)
+    .eq('betaald', true);
+  const som = (data ?? []).reduce((s, l) => s + Number(l.bedrag ?? 0), 0);
+  return Math.round(som * 100) / 100;
 }
 
 // ---------- Auth ----------
@@ -42,9 +75,21 @@ export async function maakRonde(fd: FormData) {
   await assertAdmin();
   const naam = str(fd, 'naam');
   const maand = str(fd, 'maand');
-  const lotprijs = Number(str(fd, 'lotprijs')) || 5;
-  if (!naam || !maand) return;
-  await serviceClient().from('rondes').insert({ naam, maand, lotprijs });
+  const experience = str(fd, 'experience');
+  const aanbieder = str(fd, 'aanbieder');
+  // Experience én aanbieder zijn verplicht: dat is de hoofdprijs van de ronde.
+  if (!naam || !maand || !experience || !aanbieder) return;
+  const sb = serviceClient();
+  const { data } = await sb
+    .from('rondes')
+    .insert({ naam, maand })
+    .select('id')
+    .single();
+  if (data?.id) {
+    await sb
+      .from('experiences')
+      .insert({ ronde_id: data.id, titel: experience, aanbieder });
+  }
   revalidatePath('/beheer');
   revalidatePath('/meedoen');
 }
@@ -54,7 +99,18 @@ export async function zetRondeStatus(fd: FormData) {
   const id = str(fd, 'id');
   const status = str(fd, 'status');
   if (!id || !['open', 'gesloten', 'getrokken'].includes(status)) return;
-  await serviceClient().from('rondes').update({ status }).eq('id', id);
+  const sb = serviceClient();
+  await sb.from('rondes').update({ status }).eq('id', id);
+
+  // Bij sluiten/getrokken: zet de weekopbrengst van de gekoppelde winnaar(s)
+  // automatisch gelijk aan de opbrengst van deze ronde (som van de betalingen).
+  if (status === 'gesloten' || status === 'getrokken') {
+    const opbrengst = await rondeOpbrengst(id);
+    await sb.from('winnaars').update({ opbrengst }).eq('ronde_id', id);
+    revalidatePath('/');
+    revalidatePath('/goede-doelen');
+  }
+
   revalidatePath('/beheer');
   revalidatePath('/meedoen');
   revalidatePath(`/beheer/ronde/${id}`);
@@ -64,9 +120,15 @@ export async function verwijderRonde(fd: FormData) {
   await assertAdmin();
   const id = str(fd, 'id');
   if (!id) return;
-  await serviceClient().from('rondes').delete().eq('id', id);
+  const sb = serviceClient();
+  // Ook de gekoppelde winnaar(s) weg, zodat de opbrengst uit het overzicht
+  // verdwijnt. Loten en experiences cascaden via de database.
+  await sb.from('winnaars').delete().eq('ronde_id', id);
+  await sb.from('rondes').delete().eq('id', id);
   revalidatePath('/beheer');
   revalidatePath('/meedoen');
+  revalidatePath('/');
+  revalidatePath('/goede-doelen');
 }
 
 // ---------- Experiences ----------
@@ -81,6 +143,24 @@ export async function maakExperience(fd: FormData) {
     omschrijving: str(fd, 'omschrijving') || null,
     aanbieder: str(fd, 'aanbieder') || null,
   });
+  revalidatePath(`/beheer/ronde/${ronde_id}`);
+  revalidatePath('/meedoen');
+}
+
+export async function wijzigExperience(fd: FormData) {
+  await assertAdmin();
+  const id = str(fd, 'id');
+  const ronde_id = str(fd, 'ronde_id');
+  const titel = str(fd, 'titel');
+  if (!id || !titel) return;
+  await serviceClient()
+    .from('experiences')
+    .update({
+      titel,
+      aanbieder: str(fd, 'aanbieder') || null,
+      omschrijving: str(fd, 'omschrijving') || null,
+    })
+    .eq('id', id);
   revalidatePath(`/beheer/ronde/${ronde_id}`);
   revalidatePath('/meedoen');
 }
@@ -143,13 +223,20 @@ export async function maakWinnaar(fd: FormData) {
     }
   }
 
+  // Hangt de winnaar aan een ronde? Dan komt de weekopbrengst automatisch uit
+  // de betalingen van die ronde. Anders het (handmatige) veld.
+  const opbrengst = ronde_id
+    ? await rondeOpbrengst(ronde_id)
+    : Number(str(fd, 'opbrengst')) || 0;
+
   await sb.from('winnaars').insert({
     naam,
     experience_titel,
+    aanbieder: str(fd, 'aanbieder') || null,
     maand,
     ronde_id,
     toelichting: str(fd, 'toelichting') || null,
-    opbrengst: Number(str(fd, 'opbrengst')) || 0,
+    opbrengst,
     foto_url,
     gepubliceerd: true,
   });
@@ -169,12 +256,14 @@ export async function wijzigWinnaar(fd: FormData) {
 
   const sb = serviceClient();
 
+  // Opbrengst wordt automatisch bepaald (uit de betalingen per ronde) en hier
+  // dus bewust niet aangeraakt.
   const update: Record<string, unknown> = {
     naam,
     experience_titel,
+    aanbieder: str(fd, 'aanbieder') || null,
     maand,
     toelichting: str(fd, 'toelichting') || null,
-    opbrengst: Number(str(fd, 'opbrengst')) || 0,
   };
 
   const foto = fd.get('foto');
@@ -235,12 +324,21 @@ export async function maakDoel(fd: FormData) {
   await assertAdmin();
   const naam = str(fd, 'naam');
   if (!naam) return;
-  await serviceClient().from('doelen').insert({
+  const sb = serviceClient();
+
+  const rij: Record<string, unknown> = {
     naam,
     omschrijving: str(fd, 'omschrijving') || null,
     jaar: Number(str(fd, 'jaar')) || null,
-    maand: str(fd, 'maand') || null,
-  });
+    maand: maandDatum(str(fd, 'maand')),
+  };
+  const foto = fd.get('foto');
+  if (foto instanceof File && foto.size > 0) {
+    const url = await uploadFoto(sb, foto, 'doelen');
+    if (url) rij.foto_url = url;
+  }
+
+  await sb.from('doelen').insert(rij);
   revalidatePath('/beheer');
   revalidatePath('/goede-doelen');
   revalidatePath('/');
@@ -250,15 +348,21 @@ export async function wijzigDoel(fd: FormData) {
   await assertAdmin();
   const id = str(fd, 'id');
   if (!id) return;
-  await serviceClient()
-    .from('doelen')
-    .update({
-      naam: str(fd, 'naam'),
-      omschrijving: str(fd, 'omschrijving') || null,
-      jaar: Number(str(fd, 'jaar')) || null,
-      maand: str(fd, 'maand') || null,
-    })
-    .eq('id', id);
+  const sb = serviceClient();
+
+  const update: Record<string, unknown> = {
+    naam: str(fd, 'naam'),
+    omschrijving: str(fd, 'omschrijving') || null,
+    jaar: Number(str(fd, 'jaar')) || null,
+    maand: maandDatum(str(fd, 'maand')),
+  };
+  const foto = fd.get('foto');
+  if (foto instanceof File && foto.size > 0) {
+    const url = await uploadFoto(sb, foto, 'doelen');
+    if (url) update.foto_url = url;
+  }
+
+  await sb.from('doelen').update(update).eq('id', id);
   revalidatePath('/beheer');
   revalidatePath('/goede-doelen');
   revalidatePath('/');

@@ -24,7 +24,7 @@ export default async function TrekkingPage({
   if (!ronde) notFound();
 
   const [{ data: exp }, { data: loten }] = await Promise.all([
-    sb.from('experiences').select('titel').eq('ronde_id', id).order('sort'),
+    sb.from('experiences').select('titel, aanbieder').eq('ronde_id', id).order('sort'),
     sb
       .from('loten')
       .select('lotnummer, naam')
@@ -33,7 +33,8 @@ export default async function TrekkingPage({
       .order('lotnummer', { ascending: true }),
   ]);
 
-  const experiences = ((exp as { titel: string }[] | null) ?? []).map((e) => e.titel);
+  const experiences =
+    (exp as { titel: string; aanbieder: string | null }[] | null) ?? [];
   const betaaldeLoten = (loten as Pick<Lot, 'lotnummer' | 'naam'>[] | null) ?? [];
 
   return (

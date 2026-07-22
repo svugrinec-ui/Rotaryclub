@@ -1,5 +1,6 @@
 import { euro } from '@/lib/format';
 import type { Voortgang } from '@/lib/doel';
+import { IconHeart, IconTrophy } from '@/components/Icons';
 
 interface Props {
   voortgang: Voortgang;
@@ -25,6 +26,21 @@ export default function DoelMeter({
 }: Props) {
   const { opgehaald, doel, resterend, pct, maandNaam, gehaald } = voortgang;
   const extra = opgehaald - doel;
+  const over = extra > 0; // voorbij het doel
+
+  // Bij een overshoot staat de balk voor het totaal: groen tot het doel, goud
+  // voor het extra bedrag. goalFrac = waar het doel in dat totaal ligt.
+  const goalFrac = over && opgehaald > 0
+    ? Math.min(92, Math.max(8, (doel / opgehaald) * 100))
+    : 100;
+
+  const fillStyle = over
+    ? {
+        width: '100%',
+        background: `linear-gradient(90deg, #1f9d55 0 ${goalFrac}%, #f4a416 ${goalFrac}% 100%)`,
+        animation: 'none' as const,
+      }
+    : { width: `${Math.min(100, Math.max(2, pct))}%` };
 
   return (
     <div className={`doelmeter niveau-${niveau(pct)}`}>
@@ -37,16 +53,15 @@ export default function DoelMeter({
 
       {doelNaam && (
         <div className="doelmeter-doel">
-          ❤️ {doelLabel}: <strong>{doelNaam}</strong>
+          <IconHeart size={16} /> {doelLabel}: <strong>{doelNaam}</strong>
         </div>
       )}
 
       <div className="doelmeter-track">
-        <div
-          className="doelmeter-fill"
-          style={{ width: `${Math.min(100, Math.max(2, pct))}%` }}
-        />
-        {voortgang.weken > 1 && (
+        <div className="doelmeter-fill" style={fillStyle}>
+          {over && <span className="doelmeter-glans" style={{ left: `${goalFrac}%` }} />}
+        </div>
+        {!over && voortgang.weken > 1 && (
           <div className="doelmeter-ticks" aria-hidden>
             {Array.from({ length: voortgang.weken - 1 }, (_, i) => (
               <span
@@ -58,17 +73,27 @@ export default function DoelMeter({
         )}
       </div>
 
-      {voortgang.weken > 1 && (
+      {over ? (
+        <div className="doelmeter-hint">
+          <span className="doelmeter-legenda groen" /> tot het doel ({euro(doel)}) ·{' '}
+          <span className="doelmeter-legenda goud" /> de {euro(extra)} die we erbovenop haalden
+        </div>
+      ) : voortgang.weken > 1 ? (
         <div className="doelmeter-hint">
           De stippellijnen zijn de {voortgang.weken} weken van de maand — samen halen
           we het maanddoel binnen de maand.
         </div>
-      )}
+      ) : null}
 
       <div className="doelmeter-status">
-        {gehaald ? (
+        {over ? (
           <strong>
-            🎉 Doel gehaald!{extra > 0 ? ` €${extra.toFixed(0)} erboven op — top!` : ' Precies raak!'}
+            <IconTrophy size={16} /> Voorbij het doel! {euro(extra)} extra —{' '}
+            {Math.round(pct)}% opgehaald
+          </strong>
+        ) : gehaald ? (
+          <strong>
+            <IconTrophy size={16} /> Doel gehaald! Precies raak!
           </strong>
         ) : motiverend ? (
           <span>
