@@ -1,49 +1,51 @@
 import { publicClient } from '@/lib/supabase';
 import { euro, datumLabel, maandLabel, bestuursjaar } from '@/lib/format';
 import { maandVoortgang, doelVoorMaand } from '@/lib/doel';
+import { bouwWeken } from '@/lib/opbrengst';
 import DoelMeter from '@/components/DoelMeter';
-import type { Doel, Winnaar } from '@/lib/types';
+import type { Doel, Winnaar, Ronde } from '@/lib/types';
 
 export const revalidate = 60;
 
 export default async function GoedeDoelenPage() {
   const sb = publicClient();
 
-  const [{ data: doelenData }, { data: winnaarsData }] = await Promise.all([
-    sb
-      .from('doelen')
-      .select('*')
-      .order('sort', { ascending: true })
-      .order('created_at', { ascending: true }),
-    sb
-      .from('winnaars')
-      .select('*')
-      .eq('gepubliceerd', true)
-      .order('maand', { ascending: true }),
-  ]);
+  const [{ data: doelenData }, { data: winnaarsData }, { data: rondesData }] =
+    await Promise.all([
+      sb
+        .from('doelen')
+        .select('*')
+        .order('sort', { ascending: true })
+        .order('created_at', { ascending: true }),
+      sb
+        .from('winnaars')
+        .select('*')
+        .eq('gepubliceerd', true)
+        .order('maand', { ascending: true }),
+      sb.from('rondes').select('*'),
+    ]);
 
   const doelen = (doelenData as Doel[] | null) ?? [];
   const winnaars = (winnaarsData as Winnaar[] | null) ?? [];
+  const rondes = (rondesData as Ronde[] | null) ?? [];
 
-  // Opbouw per week: elke loterijweek met een oplopend totaal.
+  // Opbouw per week: afgesloten rondes + oude losse winnaars, oplopend totaal.
   let loper = 0;
-  const weken = winnaars
-    .filter((w) => Number(w.opbrengst ?? 0) > 0)
-    .map((w) => {
-      loper += Number(w.opbrengst);
-      return { w, bedrag: Number(w.opbrengst), cumulatief: loper };
-    });
+  const weken = bouwWeken(rondes, winnaars).map((w) => {
+    loper += w.opbrengst;
+    return { w, bedrag: w.opbrengst, cumulatief: Math.round(loper * 100) / 100 };
+  });
 
   const doelenSom = doelen.reduce((s, d) => s + Number(d.opbrengst), 0);
-  const voortgang = maandVoortgang(winnaars);
+  const voortgang = maandVoortgang(weken.map(({ w }) => w));
   const huidigDoel = doelVoorMaand(doelen, voortgang.maandIso);
 
   // Totaal over het lopende Rotary-bestuursjaar (juli–juni).
   const referentie =
-    winnaars.length > 0 ? winnaars[winnaars.length - 1].maand : new Date().toISOString();
+    weken.length > 0 ? weken[weken.length - 1].w.maand : new Date().toISOString();
   const bj = bestuursjaar(referentie);
-  const bjSom = winnaars.reduce(
-    (s, w) => (bestuursjaar(w.maand).start === bj.start ? s + Number(w.opbrengst ?? 0) : s),
+  const bjSom = weken.reduce(
+    (s, { w }) => (bestuursjaar(w.maand).start === bj.start ? s + w.opbrengst : s),
     0,
   );
   const jaarTotaal = bjSom > 0 ? bjSom : doelenSom;
@@ -120,7 +122,7 @@ export default async function GoedeDoelenPage() {
               </thead>
               <tbody>
                 {[...weken].reverse().map(({ w, bedrag, cumulatief }) => (
-                  <tr key={w.id}>
+                  <tr key={w.key}>
                     <td>{datumLabel(w.maand)}</td>
                     <td>{w.experience_titel}</td>
                     <td style={{ textAlign: 'right' }}>{euro(bedrag)}</td>

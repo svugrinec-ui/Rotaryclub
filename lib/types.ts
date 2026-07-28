@@ -6,6 +6,7 @@ export interface Ronde {
   maand: string; // ISO date
   status: RondeStatus;
   lotprijs: number;
+  opbrengst: number; // som van de betaalde loten; bijgewerkt bij afvinken/sluiten
   created_at: string;
 }
 

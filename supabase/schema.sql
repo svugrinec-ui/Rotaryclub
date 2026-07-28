@@ -11,6 +11,7 @@ create table if not exists public.rondes (
   status      text not null default 'open'
                 check (status in ('open', 'gesloten', 'getrokken')),
   lotprijs    numeric(8,2) not null default 5.00,  -- prijs per lot in euro's
+  opbrengst   numeric not null default 0,          -- som van de betaalde loten
   created_at  timestamptz not null default now()
 );
 
@@ -91,9 +92,12 @@ create policy "doelen publiek leesbaar" on public.doelen
 
 -- Lopende ronde + bijbehorende experiences: openbaar leesbaar,
 -- zodat de meedoen-pagina achter de QR kan tonen wat er te winnen is.
+-- Rondes zijn publiek leesbaar: de goede-doelen-pagina en de homepage-meter
+-- tellen de afgesloten rondes. Loten blijven privé (geen select-policy).
 drop policy if exists "open rondes leesbaar" on public.rondes;
-create policy "open rondes leesbaar" on public.rondes
-  for select using (status = 'open');
+drop policy if exists "rondes publiek leesbaar" on public.rondes;
+create policy "rondes publiek leesbaar" on public.rondes
+  for select using (true);
 
 drop policy if exists "experiences van open rondes leesbaar" on public.experiences;
 create policy "experiences van open rondes leesbaar" on public.experiences

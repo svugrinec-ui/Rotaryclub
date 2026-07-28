@@ -3,6 +3,7 @@ import { isAdmin } from '@/lib/auth';
 import { serviceClient } from '@/lib/supabase';
 import { euro, maandLabel, datumLabel } from '@/lib/format';
 import { BUNDELS } from '@/lib/bundels';
+import { bouwWeken, wekenTotaal } from '@/lib/opbrengst';
 import ConfirmButton from '@/components/ConfirmButton';
 import { IconTrophy } from '@/components/Icons';
 import type { Ronde, Doel, Winnaar } from '@/lib/types';
@@ -76,6 +77,13 @@ export default async function BeheerPage({
   const dezeMaand = vandaag.slice(0, 8) + '01';
   // Snelknop trekking hoort bij een lopende (open) loterijronde.
   const openRonde = rondes.find((r) => r.status === 'open') ?? null;
+
+  // Publiek getoonde weken/totaal: afgesloten rondes + oude losse winnaars.
+  const weken = bouwWeken(rondes, winnaars.filter((w) => w.gepubliceerd));
+  const totaalNu = wekenTotaal(weken);
+  // Oude, met de hand ingevoerde weken (zonder ronde) blijven handmatig bij te
+  // stellen; ronde-weken lopen automatisch mee.
+  const losseWinnaars = winnaars.filter((w) => !w.ronde_id);
 
   return (
     <>
@@ -375,16 +383,16 @@ export default async function BeheerPage({
 
       {/* ---------- Opbrengst per week (handmatig, ingeklapt) ---------- */}
       <details className="beheer-inklap">
-        <summary>Opbrengst per week — handmatig bijstellen</summary>
+        <summary>Opbrengst per week — oude weken handmatig bijstellen</summary>
         <p className="muted" style={{ marginTop: 10 }}>
-          De opbrengst per ronde wordt automatisch berekend uit de betalingen (zie
-          “Opbrengst deze ronde” bij een ronde). Dit blok is alleen om de publieke
-          “Opbouw per week” met de hand bij te stellen. Totaal nu:{' '}
-          {euro(winnaars.reduce((s, w) => s + Number(w.opbrengst ?? 0), 0))}.
+          De opbrengst van een ronde loopt automatisch mee zodra je hem afsluit
+          (de som van de afgevinkte loten) — daar hoef je niks voor te doen. Dit
+          blok is alleen voor oude weken van vóór de digitale loten. Totaal nu
+          (zoals publiek getoond): <strong>{euro(totaalNu)}</strong>.
         </p>
-        {winnaars.length === 0 ? (
+        {losseWinnaars.length === 0 ? (
           <div className="empty">
-            Nog geen weken. Leg eerst een winnaar vast; daar hoort de weekopbrengst bij.
+            Geen losse weken. Alle opbrengsten komen automatisch uit de rondes.
           </div>
         ) : (
           <div className="table-wrap">
@@ -398,7 +406,7 @@ export default async function BeheerPage({
                 </tr>
               </thead>
               <tbody>
-                {[...winnaars]
+                {[...losseWinnaars]
                   .sort((a, b) => b.maand.localeCompare(a.maand))
                   .map((w) => (
                     <tr key={w.id}>

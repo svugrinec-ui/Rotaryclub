@@ -2,27 +2,33 @@ import Link from 'next/link';
 import { publicClient } from '@/lib/supabase';
 import { datumLabel } from '@/lib/format';
 import { maandVoortgang, doelVoorMaand } from '@/lib/doel';
+import { bouwWeken } from '@/lib/opbrengst';
 import DoelMeter from '@/components/DoelMeter';
-import type { Winnaar, Doel } from '@/lib/types';
+import type { Winnaar, Doel, Ronde } from '@/lib/types';
 
 export const revalidate = 60;
 
 export default async function HomePage() {
   const sb = publicClient();
 
-  const [{ data: winnaars }, { data: doelen }] = await Promise.all([
-    sb
-      .from('winnaars')
-      .select('*')
-      .eq('gepubliceerd', true)
-      .order('maand', { ascending: false })
-      .limit(24),
-    sb.from('doelen').select('*'),
-  ]);
+  const [{ data: winnaars }, { data: doelen }, { data: rondesData }] =
+    await Promise.all([
+      sb
+        .from('winnaars')
+        .select('*')
+        .eq('gepubliceerd', true)
+        .order('maand', { ascending: false })
+        .limit(24),
+      sb.from('doelen').select('*'),
+      sb.from('rondes').select('*'),
+    ]);
 
   const lijst = (winnaars as Winnaar[] | null) ?? [];
   const doelenLijst = (doelen as Doel[] | null) ?? [];
-  const voortgang = maandVoortgang(lijst);
+  const rondes = (rondesData as Ronde[] | null) ?? [];
+  // De meter telt de afgesloten rondes (+ oude losse winnaars), niet alleen de
+  // gepubliceerde winnaars — zo telt een afgesloten avond meteen mee.
+  const voortgang = maandVoortgang(bouwWeken(rondes, lijst));
   const huidigDoel = doelVoorMaand(doelenLijst, voortgang.maandIso);
 
   return (

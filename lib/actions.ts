@@ -55,6 +55,17 @@ async function rondeOpbrengst(rondeId: string): Promise<number> {
   return Math.round(som * 100) / 100;
 }
 
+/**
+ * Schrijft de actuele opbrengst (som van de betaalde loten) naar de ronde zelf.
+ * Bron van waarheid voor het publieke totaal; roep dit aan zodra betalingen
+ * wijzigen (afvinken, lot verwijderen, ronde sluiten).
+ */
+async function syncRondeOpbrengst(rondeId: string): Promise<number> {
+  const opbrengst = await rondeOpbrengst(rondeId);
+  await serviceClient().from('rondes').update({ opbrengst }).eq('id', rondeId);
+  return opbrengst;
+}
+
 // ---------- Auth ----------
 export async function login(fd: FormData) {
   const password = str(fd, 'password');
@@ -102,14 +113,14 @@ export async function zetRondeStatus(fd: FormData) {
   const sb = serviceClient();
   await sb.from('rondes').update({ status }).eq('id', id);
 
-  // Bij sluiten/getrokken: zet de weekopbrengst van de gekoppelde winnaar(s)
-  // automatisch gelijk aan de opbrengst van deze ronde (som van de betalingen).
-  if (status === 'gesloten' || status === 'getrokken') {
-    const opbrengst = await rondeOpbrengst(id);
-    await sb.from('winnaars').update({ opbrengst }).eq('ronde_id', id);
-    revalidatePath('/');
-    revalidatePath('/goede-doelen');
-  }
+  // De opbrengst hoort bij de ronde: bij elke statuswijziging de som van de
+  // betaalde loten wegschrijven, zodat een afgesloten ronde meteen meetelt —
+  // ook zonder gepubliceerde winnaar. Een eventuele gekoppelde winnaar krijgt
+  // hetzelfde bedrag mee (voor consistentie in het overzicht).
+  const opbrengst = await syncRondeOpbrengst(id);
+  await sb.from('winnaars').update({ opbrengst }).eq('ronde_id', id);
+  revalidatePath('/');
+  revalidatePath('/goede-doelen');
 
   revalidatePath('/beheer');
   revalidatePath('/meedoen');
@@ -186,7 +197,11 @@ export async function zetBetaald(fd: FormData) {
     .from('loten')
     .update({ betaald, betaald_op: betaald ? new Date().toISOString() : null })
     .eq('id', id);
+  // Opbrengst van de ronde meteen bijwerken zodat totalen kloppen.
+  if (ronde_id) await syncRondeOpbrengst(ronde_id);
   revalidatePath(`/beheer/ronde/${ronde_id}`);
+  revalidatePath('/');
+  revalidatePath('/goede-doelen');
 }
 
 export async function verwijderLot(fd: FormData) {
@@ -195,7 +210,10 @@ export async function verwijderLot(fd: FormData) {
   const ronde_id = str(fd, 'ronde_id');
   if (!id) return;
   await serviceClient().from('loten').delete().eq('id', id);
+  if (ronde_id) await syncRondeOpbrengst(ronde_id);
   revalidatePath(`/beheer/ronde/${ronde_id}`);
+  revalidatePath('/');
+  revalidatePath('/goede-doelen');
 }
 
 // ---------- Winnaars ----------
