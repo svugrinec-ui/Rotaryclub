@@ -8,6 +8,7 @@ interface Props {
   doelNaam?: string; // naam van het goede doel waarvoor gegeven wordt
   doelLabel?: string; // begeleidende tekst vóór de doelnaam (per pagina logisch)
   motiverend?: boolean; // net iets aansporender op de meedoen-pagina
+  vorige?: { maandNaam: string; opgehaald: number; doel: number } | null; // vorige maand
 }
 
 function niveau(pct: number): string {
@@ -17,12 +18,26 @@ function niveau(pct: number): string {
   return 'start';
 }
 
+/** Kleur van een percentage: ≥100% groen, 80–100% oranje, daaronder rood. */
+function pctKleur(pct: number): string {
+  if (pct >= 100) return '#1f9d55';
+  if (pct >= 80) return '#f4a416';
+  return '#d64545';
+}
+
+function Pct({ pct }: { pct: number }) {
+  return (
+    <strong style={{ color: pctKleur(pct) }}>{Math.round(pct)}%</strong>
+  );
+}
+
 export default function DoelMeter({
   voortgang,
   titel,
   doelNaam,
   doelLabel = 'Je geeft voor',
   motiverend,
+  vorige,
 }: Props) {
   const { opgehaald, doel, resterend, pct, maandNaam, gehaald } = voortgang;
   const extra = opgehaald - doel;
@@ -89,7 +104,7 @@ export default function DoelMeter({
         {over ? (
           <strong>
             <IconTrophy size={16} /> Voorbij het doel! {euro(extra)} extra —{' '}
-            {Math.round(pct)}% opgehaald
+            <Pct pct={pct} /> opgehaald
           </strong>
         ) : gehaald ? (
           <strong>
@@ -102,10 +117,19 @@ export default function DoelMeter({
           </span>
         ) : (
           <span>
-            Nog <strong>{euro(resterend)}</strong> te gaan · {Math.round(pct)}%
+            Nog <strong>{euro(resterend)}</strong> te gaan · <Pct pct={pct} />
           </span>
         )}
       </div>
+
+      {vorige && vorige.opgehaald > 0 && (
+        <div className="doelmeter-vorige muted">
+          Vorige maand ({vorige.maandNaam}): {euro(vorige.opgehaald)} / {euro(vorige.doel)}
+          {vorige.doel > 0 && (
+            <> · <Pct pct={(vorige.opgehaald / vorige.doel) * 100} /></>
+          )}
+        </div>
+      )}
     </div>
   );
 }

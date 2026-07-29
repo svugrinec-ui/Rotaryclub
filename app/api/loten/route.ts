@@ -9,6 +9,8 @@ interface Body {
   naam?: string;
   contact?: string | null;
   bedrag?: number;
+  betaalwijze?: string;
+  nummers?: number[]; // optioneel: zelf gekozen lotnummers
 }
 
 // Willekeurige lotnummers uit een ruime range, zodat ze aanvoelen als echte
@@ -42,6 +44,7 @@ export async function POST(req: Request) {
   const naam = (body.naam ?? '').trim();
   const contact = (body.contact ?? '')?.toString().trim() || null;
   const bundel = bundelVoorBedrag(Number(body.bedrag));
+  const betaalwijze = body.betaalwijze === 'cash' ? 'cash' : 'bank';
 
   if (!rondeId || !naam) {
     return NextResponse.json(
@@ -70,8 +73,66 @@ export async function POST(req: Request) {
     );
   }
 
-  // Bij gelijktijdige inschrijvingen kan een nummer net vergeven zijn; dan
-  // proberen we het opnieuw met verse willekeurige nummers.
+  // De bezoeker bevestigt "ik heb betaald" vóór dit punt, dus het lot doet
+  // meteen mee met de trekking. De commissie kan dit later terugdraaien.
+  // Verdeel het bundelbedrag exact (in centen) over de loten.
+  const totaalCenten = Math.round(bundel.bedrag * 100);
+  const basis = Math.floor(totaalCenten / bundel.loten);
+  const rest = totaalCenten - basis * bundel.loten;
+  const bouwRijen = (nummers: number[]) => {
+    const nu = new Date().toISOString();
+    return nummers.map((n, i) => ({
+      ronde_id: rondeId,
+      lotnummer: n,
+      naam,
+      contact,
+      betaald: true,
+      betaald_op: nu,
+      bedrag: (i < rest ? basis + 1 : basis) / 100,
+      betaalwijze,
+    }));
+  };
+
+  // Zelf gekozen lotnummers?
+  const eigen = Array.isArray(body.nummers) ? body.nummers.map((n) => Number(n)) : null;
+  if (eigen) {
+    if (eigen.length !== bundel.loten) {
+      return NextResponse.json(
+        { error: `Kies precies ${bundel.loten} lotnummers voor deze bundel.` },
+        { status: 400 },
+      );
+    }
+    if (eigen.some((n) => !Number.isInteger(n) || n < 1 || n > 9999)) {
+      return NextResponse.json(
+        { error: 'Lotnummers moeten hele getallen tussen 1 en 9999 zijn.' },
+        { status: 400 },
+      );
+    }
+    if (new Set(eigen).size !== eigen.length) {
+      return NextResponse.json(
+        { error: 'Je hebt een dubbel lotnummer gekozen.' },
+        { status: 400 },
+      );
+    }
+    const nummers = [...eigen].sort((a, b) => a - b);
+    const { error: insErr } = await sb.from('loten').insert(bouwRijen(nummers));
+    if (insErr) {
+      if (insErr.code === '23505') {
+        return NextResponse.json(
+          { error: 'Eén of meer van je gekozen nummers zijn al vergeven. Kies andere.' },
+          { status: 409 },
+        );
+      }
+      return NextResponse.json(
+        { error: 'Inschrijven mislukt. Probeer het nog eens.' },
+        { status: 500 },
+      );
+    }
+    return NextResponse.json({ nummers, bedrag: bundel.bedrag });
+  }
+
+  // Anders: willekeurige nummers. Bij gelijktijdige inschrijvingen kan een
+  // nummer net vergeven zijn; dan proberen we het opnieuw met verse nummers.
   for (let poging = 0; poging < 5; poging++) {
     const { data: bestaande } = await sb
       .from('loten')
@@ -92,24 +153,7 @@ export async function POST(req: Request) {
     // het later opzoeken (dat ook oplopend sorteert).
     nummers.sort((a, b) => a - b);
 
-    // De bezoeker bevestigt "ik heb betaald" vóór dit punt, dus het lot doet
-    // meteen mee met de trekking. De commissie kan dit later terugdraaien.
-    const nu = new Date().toISOString();
-    // Verdeel het bundelbedrag exact (in centen) over de loten.
-    const totaalCenten = Math.round(bundel.bedrag * 100);
-    const basis = Math.floor(totaalCenten / bundel.loten);
-    const rest = totaalCenten - basis * bundel.loten;
-    const rijen = nummers.map((n, i) => ({
-      ronde_id: rondeId,
-      lotnummer: n,
-      naam,
-      contact,
-      betaald: true,
-      betaald_op: nu,
-      bedrag: (i < rest ? basis + 1 : basis) / 100,
-    }));
-
-    const { error: insErr } = await sb.from('loten').insert(rijen);
+    const { error: insErr } = await sb.from('loten').insert(bouwRijen(nummers));
     if (!insErr) {
       return NextResponse.json({ nummers, bedrag: bundel.bedrag });
     }

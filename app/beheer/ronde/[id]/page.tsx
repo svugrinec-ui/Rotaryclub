@@ -2,7 +2,8 @@ import Link from 'next/link';
 import { redirect, notFound } from 'next/navigation';
 import { isAdmin } from '@/lib/auth';
 import { serviceClient } from '@/lib/supabase';
-import { euro, maandLabel } from '@/lib/format';
+import { euro, maandLabel, tijdstipLabel } from '@/lib/format';
+import { BUNDELS } from '@/lib/bundels';
 import type { Ronde, Experience, Lot } from '@/lib/types';
 import {
   maakExperience,
@@ -10,8 +11,11 @@ import {
   verwijderExperience,
   zetBetaald,
   verwijderLot,
+  verwijderPersoonLoten,
   zetRondeStatus,
+  verwijderRonde,
 } from '@/lib/actions';
+import ConfirmButton from '@/components/ConfirmButton';
 
 export const dynamic = 'force-dynamic';
 
@@ -48,6 +52,14 @@ export default async function RondeBeheerPage({
 
   // Opbrengst deze ronde (de week): totaal + per deelnemer.
   const totaalOpbrengst = betaald.reduce((s, l) => s + Number(l.bedrag ?? 0), 0);
+  // Splitsing cash vs bank (voor het afstemmen — cash zit niet op het bankafschrift).
+  const cashOpbrengst =
+    Math.round(
+      betaald
+        .filter((l) => l.betaalwijze === 'cash')
+        .reduce((s, l) => s + Number(l.bedrag ?? 0), 0) * 100,
+    ) / 100;
+  const bankOpbrengst = Math.round((totaalOpbrengst - cashOpbrengst) * 100) / 100;
   const perPersoonMap: Record<string, { naam: string; aantal: number; bedrag: number }> = {};
   for (const l of betaald) {
     const r = (perPersoonMap[l.naam] ??= { naam: l.naam, aantal: 0, bedrag: 0 });
@@ -56,15 +68,27 @@ export default async function RondeBeheerPage({
   }
   const perPersoon = Object.values(perPersoonMap).sort((a, b) => b.bedrag - a.bedrag);
 
-  // Loten per deelnemer (voor de inklapbare loten-lijst).
+  // Loten per deelnemer (voor de inklapbare loten-lijst). We vlaggen op TOTAAL:
+  // klopt het aantal loten met één bundel (3/7/11/15)? Zo niet, dan is het
+  // opvallend (bijv. 6 = twee keer ingeschreven). Robuust bij handmatig wissen:
+  // haal je van 6 terug naar 3, dan verdwijnt de vlag vanzelf.
+  const bundelMaten = new Set(BUNDELS.map((b) => b.loten));
   const lotenPerPersoonMap: Record<string, Lot[]> = {};
   for (const l of loten) (lotenPerPersoonMap[l.naam] ??= []).push(l);
   const deelnemers = Object.entries(lotenPerPersoonMap)
-    .map(([naam, ls]) => ({
-      naam,
-      loten: [...ls].sort((a, b) => a.lotnummer - b.lotnummer),
-      betaald: ls.filter((l) => l.betaald).length,
-    }))
+    .map(([naam, ls]) => {
+      const tijden = [...new Set(ls.map((l) => l.created_at))].sort();
+      const totaalBedrag =
+        Math.round(ls.reduce((s, l) => s + Number(l.bedrag ?? 0), 0) * 100) / 100;
+      return {
+        naam,
+        loten: [...ls].sort((a, b) => a.lotnummer - b.lotnummer),
+        betaald: ls.filter((l) => l.betaald).length,
+        tijden,
+        totaalBedrag,
+        opvallend: !bundelMaten.has(ls.length), // aantal past niet bij één bundel
+      };
+    })
     .sort((a, b) => a.naam.localeCompare(b.naam));
 
   return (
@@ -120,12 +144,29 @@ export default async function RondeBeheerPage({
           deelnemers.map((p) => (
             <details className="loten-persoon" key={p.naam}>
               <summary>
-                <span className="loten-persoon-naam">{p.naam}</span>
+                <span className="loten-persoon-naam">
+                  {p.naam}
+                  {p.opvallend && (
+                    <span className="pill pill-flag" title="Aantal loten past niet bij één bundel — controleer of dit een dubbele inschrijving is">
+                      ⚠ {p.loten.length} loten — controleren
+                    </span>
+                  )}
+                </span>
                 <span className="muted">
                   {p.loten.length} {p.loten.length === 1 ? 'lot' : 'loten'}
                   {p.betaald < p.loten.length ? ` · ${p.loten.length - p.betaald} open` : ''}
                 </span>
               </summary>
+
+              <div className="inschrijvingen">
+                <span className="muted">
+                  {p.tijden.length > 1 ? 'Ingeschreven op' : 'Ingeschreven'}:{' '}
+                  {p.tijden.map((t) => tijdstipLabel(t)).join(' · ')} · totaal{' '}
+                  <strong>{euro(p.totaalBedrag)}</strong>
+                  {p.tijden.length > 1 && ` · ${p.tijden.length} keer`}
+                </span>
+              </div>
+
               <div className="loten-lijst">
                 {p.loten.map((l) => (
                   <div className="lot-regel" key={l.id}>
@@ -133,6 +174,9 @@ export default async function RondeBeheerPage({
                     <span className={`pill ${l.betaald ? 'pill-ok' : 'pill-wait'}`}>
                       {l.betaald ? 'Betaald' : 'Open'}
                     </span>
+                    {l.betaalwijze === 'cash' && (
+                      <span className="pill pill-cash">contant</span>
+                    )}
                     <div className="row-actions" style={{ marginLeft: 'auto' }}>
                       <form action={zetBetaald}>
                         <input type="hidden" name="id" value={l.id} />
@@ -150,6 +194,17 @@ export default async function RondeBeheerPage({
                     </div>
                   </div>
                 ))}
+
+                <form action={verwijderPersoonLoten} style={{ marginTop: 10 }}>
+                  <input type="hidden" name="ronde_id" value={ronde.id} />
+                  <input type="hidden" name="naam" value={p.naam} />
+                  <ConfirmButton
+                    className="btn btn-ghost btn-sm"
+                    message={`Alle ${p.loten.length} loten van ${p.naam} verwijderen? (bijv. een dubbele inschrijving)`}
+                  >
+                    Alle loten van {p.naam} verwijderen
+                  </ConfirmButton>
+                </form>
               </div>
             </details>
           ))
@@ -165,6 +220,16 @@ export default async function RondeBeheerPage({
             {perPersoon.length} deelnemers
           </span>
         </div>
+        {betaald.length > 0 && (
+          <div className="opbrengst-split">
+            <span className="split-blok">
+              <span className="muted">Bank</span> <strong>{euro(bankOpbrengst)}</strong>
+            </span>
+            <span className="split-blok">
+              <span className="muted">Contant</span> <strong>{euro(cashOpbrengst)}</strong>
+            </span>
+          </div>
+        )}
         {perPersoon.length === 0 ? (
           <div className="empty">Nog geen betaalde inschrijvingen deze ronde.</div>
         ) : (
@@ -261,6 +326,30 @@ export default async function RondeBeheerPage({
         </form>
         )}
       </section>
+
+      {/* ---------- Verwijderen (alleen voor testrondes) ---------- */}
+      <details className="ronde-verwijder" style={{ marginTop: 28 }}>
+        <summary className="muted" style={{ cursor: 'pointer', fontSize: 14 }}>
+          Ronde verwijderen
+        </summary>
+        <div className="panel" style={{ marginTop: 10 }}>
+          <p className="muted" style={{ marginTop: 0 }}>
+            Alleen voor test- of foutieve rondes. Dit verwijdert de loten,
+            experiences én de winnaar van deze ronde (incl. de opbrengst) —
+            definitief, geen ongedaan maken. Wil je alleen iets corrigeren,
+            pas het dan hierboven aan.
+          </p>
+          <form action={verwijderRonde}>
+            <input type="hidden" name="id" value={ronde.id} />
+            <ConfirmButton
+              className="btn btn-danger btn-sm"
+              message={`Ronde "${ronde.naam}" verwijderen? De loten, experiences én de winnaar van deze ronde (incl. de opbrengst in het overzicht) gaan mee.`}
+            >
+              Ja, verwijder deze ronde
+            </ConfirmButton>
+          </form>
+        </div>
+      </details>
     </>
   );
 }

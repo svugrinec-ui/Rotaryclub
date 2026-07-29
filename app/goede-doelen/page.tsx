@@ -1,7 +1,7 @@
 import { publicClient } from '@/lib/supabase';
 import { euro, datumLabel, maandLabel, bestuursjaar } from '@/lib/format';
-import { maandVoortgang, doelVoorMaand } from '@/lib/doel';
-import { bouwWeken } from '@/lib/opbrengst';
+import { maandVoortgang, doelVoorMaand, MAANDDOEL } from '@/lib/doel';
+import { bouwWeken, maandTotalen, huidigeEnVorige } from '@/lib/opbrengst';
 import DoelMeter from '@/components/DoelMeter';
 import type { Doel, Winnaar, Ronde } from '@/lib/types';
 
@@ -37,8 +37,18 @@ export default async function GoedeDoelenPage() {
   });
 
   const doelenSom = doelen.reduce((s, d) => s + Number(d.opbrengst), 0);
-  const voortgang = maandVoortgang(weken.map(({ w }) => w));
+
+  // Maanddoel-meter: de laatste maand met een ronde telt (reset per maand);
+  // de maand ervoor tonen we subtiel als "vorige maand".
+  const maanden = maandTotalen(rondes, winnaars);
+  const { huidig, vorig } = huidigeEnVorige(maanden, new Date().toISOString().slice(0, 7));
+  const voortgang = maandVoortgang(
+    huidig ? [{ maand: huidig.maandIso, opbrengst: huidig.opbrengst }] : [],
+  );
   const huidigDoel = doelVoorMaand(doelen, voortgang.maandIso);
+  const vorige = vorig
+    ? { maandNaam: maandLabel(vorig.maandIso), opgehaald: vorig.opbrengst, doel: MAANDDOEL }
+    : null;
 
   // Totaal over het lopende Rotary-bestuursjaar (juli–juni).
   const referentie =
@@ -66,6 +76,7 @@ export default async function GoedeDoelenPage() {
         voortgang={voortgang}
         doelNaam={huidigDoel?.naam}
         doelLabel="Deze maand naar"
+        vorige={vorige}
       />
 
       <section>

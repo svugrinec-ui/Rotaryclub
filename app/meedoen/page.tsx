@@ -1,5 +1,7 @@
 import { publicClient } from '@/lib/supabase';
-import { maandVoortgang, doelVoorMaand } from '@/lib/doel';
+import { maandVoortgang, doelVoorMaand, MAANDDOEL } from '@/lib/doel';
+import { maandTotalen, huidigeEnVorige } from '@/lib/opbrengst';
+import { maandLabel } from '@/lib/format';
 import DoelMeter from '@/components/DoelMeter';
 import type { Ronde, Experience, Winnaar, Doel } from '@/lib/types';
 import MeedoenForm from './MeedoenForm';
@@ -10,20 +12,27 @@ export const revalidate = 30;
 export default async function MeedoenPage() {
   const sb = publicClient();
 
-  const [{ data: rondes }, { data: winnaars }, { data: doelen }] = await Promise.all([
-    sb
-      .from('rondes')
-      .select('*')
-      .eq('status', 'open')
-      .order('maand', { ascending: false })
-      .limit(1),
-    sb.from('winnaars').select('maand,opbrengst').eq('gepubliceerd', true),
+  const [{ data: rondesData }, { data: winnaars }, { data: doelen }] = await Promise.all([
+    sb.from('rondes').select('*').order('maand', { ascending: false }),
+    sb.from('winnaars').select('maand,opbrengst,ronde_id').eq('gepubliceerd', true),
     sb.from('doelen').select('*'),
   ]);
 
-  const ronde = (rondes as Ronde[] | null)?.[0] ?? null;
+  const rondesAll = (rondesData as Ronde[] | null) ?? [];
+  const ronde = rondesAll.find((r) => r.status === 'open') ?? null;
   const doelenLijst = (doelen as Doel[] | null) ?? [];
-  const voortgang = maandVoortgang((winnaars as Pick<Winnaar, 'maand' | 'opbrengst'>[] | null) ?? []);
+
+  // Maanddoel-meter: laatste maand met een ronde (reset per maand) + vorige maand.
+  const winnaarsLijst =
+    (winnaars as Pick<Winnaar, 'maand' | 'opbrengst' | 'ronde_id'>[] | null) ?? [];
+  const maanden = maandTotalen(rondesAll, winnaarsLijst);
+  const { huidig, vorig } = huidigeEnVorige(maanden, new Date().toISOString().slice(0, 7));
+  const voortgang = maandVoortgang(
+    huidig ? [{ maand: huidig.maandIso, opbrengst: huidig.opbrengst }] : [],
+  );
+  const vorige = vorig
+    ? { maandNaam: maandLabel(vorig.maandIso), opgehaald: vorig.opbrengst, doel: MAANDDOEL }
+    : null;
   const huidigDoel = doelVoorMaand(doelenLijst, ronde?.maand ?? voortgang.maandIso);
 
   let experiences: Experience[] = [];
@@ -64,6 +73,7 @@ export default async function MeedoenPage() {
         titel="Samen naar het maanddoel"
         doelNaam={huidigDoel?.naam}
         motiverend
+        vorige={vorige}
       />
 
       {experiences.length > 0 && (

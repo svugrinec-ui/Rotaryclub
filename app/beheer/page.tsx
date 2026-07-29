@@ -3,22 +3,24 @@ import { isAdmin } from '@/lib/auth';
 import { serviceClient } from '@/lib/supabase';
 import { euro, maandLabel, datumLabel } from '@/lib/format';
 import { BUNDELS } from '@/lib/bundels';
-import { bouwWeken, wekenTotaal } from '@/lib/opbrengst';
-import ConfirmButton from '@/components/ConfirmButton';
+import {
+  getInstellingen,
+  MAIL_INTRO_STANDAARD,
+  MAIL_AFSLUITING_STANDAARD,
+} from '@/lib/instellingen';
 import { IconTrophy } from '@/components/Icons';
+import ExportMailKnop from './ExportMailKnop';
 import type { Ronde, Doel, Winnaar } from '@/lib/types';
 import {
   login,
   logout,
   maakRonde,
   zetRondeStatus,
-  verwijderRonde,
   maakDoel,
   wijzigDoel,
   verwijderDoel,
   zetWinnaarPublicatie,
-  zetWeekOpbrengst,
-  verwijderWinnaar,
+  wijzigInstellingen,
 } from '@/lib/actions';
 
 export const dynamic = 'force-dynamic';
@@ -73,17 +75,11 @@ export default async function BeheerPage({
   const rondes = (rondesData as Ronde[] | null) ?? [];
   const doelen = (doelenData as Doel[] | null) ?? [];
   const winnaars = (winnaarsData as Winnaar[] | null) ?? [];
+  const instellingen = await getInstellingen();
   const vandaag = new Date().toISOString().slice(0, 10);
   const dezeMaand = vandaag.slice(0, 8) + '01';
   // Snelknop trekking hoort bij een lopende (open) loterijronde.
   const openRonde = rondes.find((r) => r.status === 'open') ?? null;
-
-  // Publiek getoonde weken/totaal: afgesloten rondes + oude losse winnaars.
-  const weken = bouwWeken(rondes, winnaars.filter((w) => w.gepubliceerd));
-  const totaalNu = wekenTotaal(weken);
-  // Oude, met de hand ingevoerde weken (zonder ronde) blijven handmatig bij te
-  // stellen; ronde-weken lopen automatisch mee.
-  const losseWinnaars = winnaars.filter((w) => !w.ronde_id);
 
   return (
     <>
@@ -97,9 +93,6 @@ export default async function BeheerPage({
       >
         <h1 style={{ margin: 0 }}>Commissie-beheer</h1>
         <div className="row-actions">
-          <Link className="btn btn-ghost btn-sm" href="/beheer/qr">
-            QR-code
-          </Link>
           <form action={logout}>
             <button className="btn btn-ghost btn-sm" type="submit">
               Uitloggen
@@ -108,25 +101,35 @@ export default async function BeheerPage({
         </div>
       </div>
 
-      {/* ---------- Snelknop: live trekking (alleen bij een open ronde) ---------- */}
-      {openRonde ? (
+      {/* ---------- Snelknoppen: live trekking + inschrijf-QR ---------- */}
+      <div style={{ display: 'flex', gap: 12, marginTop: 18, flexWrap: 'wrap' }}>
+        {openRonde ? (
+          <Link
+            className="btn btn-gold btn-groot"
+            href={`/beheer/ronde/${openRonde.id}/trekking`}
+            style={{ display: 'flex', flex: 1, minWidth: 220, justifyContent: 'center' }}
+          >
+            <IconTrophy size={20} /> Start trekking — {openRonde.naam}
+          </Link>
+        ) : (
+          <button
+            className="btn btn-gold btn-groot"
+            disabled
+            style={{ display: 'flex', flex: 1, minWidth: 220, justifyContent: 'center' }}
+            title="Open eerst een loterijronde om te trekken"
+          >
+            <IconTrophy size={20} /> Start trekking — geen open ronde
+          </button>
+        )}
         <Link
-          className="btn btn-gold btn-groot"
-          href={`/beheer/ronde/${openRonde.id}/trekking`}
-          style={{ display: 'flex', width: '100%', marginTop: 18, justifyContent: 'center' }}
+          className="btn btn-groot"
+          href="/beheer/qr"
+          style={{ display: 'flex', justifyContent: 'center', whiteSpace: 'nowrap' }}
+          title="Toon de QR-code om mee te doen — voor wie de link niet kan vinden"
         >
-          <IconTrophy size={20} /> Start trekking — {openRonde.naam}
+          Inschrijf-QR
         </Link>
-      ) : (
-        <button
-          className="btn btn-gold btn-groot"
-          disabled
-          style={{ display: 'flex', width: '100%', marginTop: 18, justifyContent: 'center' }}
-          title="Open eerst een loterijronde om te trekken"
-        >
-          <IconTrophy size={20} /> Start trekking — geen open ronde
-        </button>
-      )}
+      </div>
 
       {/* ---------- Rondes ---------- */}
       <section>
@@ -140,6 +143,7 @@ export default async function BeheerPage({
             <table className="data">
               <thead>
                 <tr>
+                  <th title="Aanvinken voor de CSV-export">Export</th>
                   <th>Ronde</th>
                   <th>Maand</th>
                   <th>Status</th>
@@ -149,6 +153,14 @@ export default async function BeheerPage({
               <tbody>
                 {rondes.map((r) => (
                   <tr key={r.id}>
+                    <td style={{ textAlign: 'center' }}>
+                      <input
+                        type="checkbox"
+                        name="ronde"
+                        value={r.id}
+                        aria-label={`Exporteer ${r.naam}`}
+                      />
+                    </td>
                     <td>
                       <Link href={`/beheer/ronde/${r.id}`}>{r.naam}</Link>
                     </td>
@@ -170,12 +182,6 @@ export default async function BeheerPage({
                         >
                           Beheer
                         </Link>
-                        <Link
-                          className="btn btn-ghost btn-sm"
-                          href={`/beheer/ronde/${r.id}/trekking`}
-                        >
-<IconTrophy size={15} /> Trekking
-                        </Link>
                         {r.status !== 'open' && (
                           <form action={zetRondeStatus}>
                             <input type="hidden" name="id" value={r.id} />
@@ -190,21 +196,18 @@ export default async function BeheerPage({
                             <button className="btn btn-ghost btn-sm">Sluit</button>
                           </form>
                         )}
-                        <form action={verwijderRonde}>
-                          <input type="hidden" name="id" value={r.id} />
-                          <ConfirmButton
-                            className="btn btn-danger btn-sm"
-                            message={`Ronde "${r.naam}" verwijderen? De loten, experiences én de winnaar van deze ronde (incl. de opbrengst in het overzicht) gaan mee.`}
-                          >
-                            Verwijder
-                          </ConfirmButton>
-                        </form>
                       </div>
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
+          </div>
+        )}
+
+        {rondes.length > 0 && (
+          <div style={{ marginTop: 12 }}>
+            <ExportMailKnop />
           </div>
         )}
 
@@ -294,10 +297,6 @@ export default async function BeheerPage({
                             {w.gepubliceerd ? 'Verberg' : 'Publiceer'}
                           </button>
                         </form>
-                        <form action={verwijderWinnaar}>
-                          <input type="hidden" name="id" value={w.id} />
-                          <button className="btn btn-danger btn-sm">Verwijder</button>
-                        </form>
                       </div>
                     </td>
                   </tr>
@@ -381,59 +380,79 @@ export default async function BeheerPage({
         ))}
       </details>
 
-      {/* ---------- Opbrengst per week (handmatig, ingeklapt) ---------- */}
+      {/* ---------- Instellingen: penningmeester & mail (ingeklapt) ---------- */}
       <details className="beheer-inklap">
-        <summary>Opbrengst per week — oude weken handmatig bijstellen</summary>
-        <p className="muted" style={{ marginTop: 10 }}>
-          De opbrengst van een ronde loopt automatisch mee zodra je hem afsluit
-          (de som van de afgevinkte loten) — daar hoef je niks voor te doen. Dit
-          blok is alleen voor oude weken van vóór de digitale loten. Totaal nu
-          (zoals publiek getoond): <strong>{euro(totaalNu)}</strong>.
-        </p>
-        {losseWinnaars.length === 0 ? (
-          <div className="empty">
-            Geen losse weken. Alle opbrengsten komen automatisch uit de rondes.
+        <summary>Instellingen — penningmeester &amp; e-mail</summary>
+        <form className="panel" action={wijzigInstellingen}>
+          <p className="muted" style={{ marginTop: 0 }}>
+            Naar dit adres wordt het financiële overzicht gemaild (knop bij de
+            loterijrondes). De geheime mailsleutel staat los in de omgeving.
+          </p>
+          <div className="inline-form">
+            <div>
+              <label htmlFor="pm-naam">Naam penningmeester</label>
+              <input
+                id="pm-naam"
+                name="penningmeester_naam"
+                type="text"
+                defaultValue={instellingen?.penningmeester_naam ?? ''}
+                placeholder="Voor- en achternaam"
+              />
+            </div>
+            <div>
+              <label htmlFor="pm-email">E-mail penningmeester</label>
+              <input
+                id="pm-email"
+                name="penningmeester_email"
+                type="email"
+                defaultValue={instellingen?.penningmeester_email ?? ''}
+                placeholder="penningmeester@voorbeeld.nl"
+              />
+            </div>
           </div>
-        ) : (
-          <div className="table-wrap">
-            <table className="data">
-              <thead>
-                <tr>
-                  <th>Datum</th>
-                  <th>Experience</th>
-                  <th>Opbrengst (€)</th>
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody>
-                {[...losseWinnaars]
-                  .sort((a, b) => b.maand.localeCompare(a.maand))
-                  .map((w) => (
-                    <tr key={w.id}>
-                      <td>{datumLabel(w.maand)}</td>
-                      <td>{w.experience_titel}</td>
-                      <td colSpan={2}>
-                        <form action={zetWeekOpbrengst} className="inline-form">
-                          <input type="hidden" name="id" value={w.id} />
-                          <input
-                            name="opbrengst"
-                            type="number"
-                            step="0.01"
-                            min="0"
-                            defaultValue={Number(w.opbrengst ?? 0)}
-                            style={{ maxWidth: 140 }}
-                          />
-                          <button className="btn btn-sm" type="submit">
-                            Opslaan
-                          </button>
-                        </form>
-                      </td>
-                    </tr>
-                  ))}
-              </tbody>
-            </table>
+          <label htmlFor="pm-afzender">Afzenderadres (optioneel)</label>
+          <input
+            id="pm-afzender"
+            name="afzender"
+            type="text"
+            defaultValue={instellingen?.afzender ?? ''}
+            placeholder="Rotary Loterij <loterij@jullie-domein.nl>"
+          />
+          <p className="muted">
+            Alleen invullen als je een eigen (in Resend geverifieerd) domein
+            gebruikt. Leeg laten = de standaard test-afzender.
+          </p>
+
+          <hr style={{ border: 0, borderTop: '1px solid var(--line)', margin: '20px 0' }} />
+          <h3 style={{ marginTop: 0 }}>Mailtekst</h3>
+          <p className="muted" style={{ marginTop: 0 }}>
+            Zo begint en eindigt de mail. De gebrande koptekst en het overzicht
+            per avond (naam, datum, opbrengst) worden automatisch toegevoegd.
+            Leeg laten = de standaardtekst.
+          </p>
+          <label htmlFor="mail-intro">Intro-tekst</label>
+          <textarea
+            id="mail-intro"
+            name="mail_intro"
+            rows={3}
+            defaultValue={instellingen?.mail_intro ?? ''}
+            placeholder={MAIL_INTRO_STANDAARD}
+          />
+          <label htmlFor="mail-afsluiting">Afsluiting</label>
+          <textarea
+            id="mail-afsluiting"
+            name="mail_afsluiting"
+            rows={2}
+            defaultValue={instellingen?.mail_afsluiting ?? ''}
+            placeholder={MAIL_AFSLUITING_STANDAARD}
+          />
+
+          <div style={{ marginTop: 14 }}>
+            <button className="btn" type="submit">
+              Opslaan
+            </button>
           </div>
-        )}
+        </form>
       </details>
     </>
   );

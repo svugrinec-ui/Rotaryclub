@@ -29,6 +29,7 @@ export interface Lot {
   betaald: boolean;
   betaald_op: string | null;
   bedrag: number; // betaald bedrag voor dit lot (bundelbedrag verdeeld over de loten)
+  betaalwijze: 'bank' | 'cash'; // hoe er betaald wordt
   created_at: string;
 }
 
@@ -44,6 +45,16 @@ export interface Winnaar {
   opbrengst: number; // opbrengst voor het goede doel in deze loterijweek
   gepubliceerd: boolean;
   created_at: string;
+}
+
+export interface Instellingen {
+  id: number;
+  penningmeester_naam: string | null;
+  penningmeester_email: string | null;
+  afzender: string | null; // afzenderadres voor de export-mail (Resend)
+  mail_intro: string | null; // bewerkbare intro-tekst van de export-mail
+  mail_afsluiting: string | null; // bewerkbare afsluiting/ondertekening
+  updated_at: string;
 }
 
 export interface Doel {

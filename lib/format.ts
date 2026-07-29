@@ -35,3 +35,15 @@ export function datumLabel(isoDate: string): string {
     year: 'numeric',
   }).format(d);
 }
+
+/** Datum + tijd in Nederlandse tijd, bijv. "29 jul 21:14" — voor inschrijfmomenten. */
+export function tijdstipLabel(isoDate: string): string {
+  const d = new Date(isoDate);
+  return new Intl.DateTimeFormat('nl-NL', {
+    day: 'numeric',
+    month: 'short',
+    hour: '2-digit',
+    minute: '2-digit',
+    timeZone: 'Europe/Amsterdam',
+  }).format(d);
+}

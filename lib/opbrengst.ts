@@ -66,3 +66,63 @@ export function bouwWeken(rondes: Ronde[], winnaars: Winnaar[]): Week[] {
 export function wekenTotaal(weken: Week[]): number {
   return Math.round(weken.reduce((s, w) => s + w.opbrengst, 0) * 100) / 100;
 }
+
+export interface MaandTotaal {
+  maandIso: string; // eerste van de maand
+  opbrengst: number;
+}
+
+/**
+ * Opbrengst per kalendermaand voor de maanddoel-meter. Elke ronde bepaalt zijn
+ * maand (ook een nog-open ronde met €0, zodat de meter meteen naar de nieuwe
+ * maand springt en op nul begint) plus de live-som van betaalde loten. Oude
+ * losse winnaars tellen mee in hun maand; ronde-gebonden winnaars niet dubbel.
+ */
+export function maandTotalen(
+  rondes: Pick<Ronde, 'maand' | 'opbrengst'>[],
+  winnaars: Pick<Winnaar, 'maand' | 'opbrengst' | 'ronde_id'>[],
+): MaandTotaal[] {
+  const perMaand = new Map<string, number>();
+
+  for (const r of rondes) {
+    const key = r.maand.slice(0, 7);
+    perMaand.set(key, (perMaand.get(key) ?? 0) + Number(r.opbrengst ?? 0));
+  }
+  for (const w of winnaars) {
+    if (w.ronde_id) continue; // via de ronde al geteld
+    const bedrag = Number(w.opbrengst ?? 0);
+    if (bedrag <= 0) continue;
+    const key = w.maand.slice(0, 7);
+    perMaand.set(key, (perMaand.get(key) ?? 0) + bedrag);
+  }
+
+  return [...perMaand.entries()]
+    .map(([key, opbrengst]) => ({
+      maandIso: `${key}-01`,
+      opbrengst: Math.round(opbrengst * 100) / 100,
+    }))
+    .sort((a, b) => a.maandIso.localeCompare(b.maandIso));
+}
+
+/**
+ * Kiest voor de meter de te tonen maand: de laatste maand die niet in de
+ * toekomst ligt (zodat een vooruit aangemaakte ronde de teller niet laat
+ * doorspringen), plus de maand ervóór als "vorige maand". `huidigKey` = de
+ * huidige maand als "YYYY-MM".
+ */
+export function huidigeEnVorige(
+  maanden: MaandTotaal[],
+  huidigKey: string,
+): { huidig: MaandTotaal | null; vorig: MaandTotaal | null } {
+  const totNu = maanden.filter((m) => m.maandIso.slice(0, 7) <= huidigKey);
+  const huidig = totNu[totNu.length - 1] ?? null;
+  const vorig = huidig
+    ? [...maanden]
+        .reverse()
+        .find(
+          (m) =>
+            m.maandIso.slice(0, 7) < huidig.maandIso.slice(0, 7) && m.opbrengst > 0,
+        ) ?? null
+    : null;
+  return { huidig, vorig };
+}

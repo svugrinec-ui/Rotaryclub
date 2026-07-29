@@ -1,8 +1,8 @@
 import Link from 'next/link';
 import { publicClient } from '@/lib/supabase';
-import { datumLabel } from '@/lib/format';
-import { maandVoortgang, doelVoorMaand } from '@/lib/doel';
-import { bouwWeken } from '@/lib/opbrengst';
+import { datumLabel, maandLabel } from '@/lib/format';
+import { maandVoortgang, doelVoorMaand, MAANDDOEL } from '@/lib/doel';
+import { maandTotalen, huidigeEnVorige } from '@/lib/opbrengst';
 import DoelMeter from '@/components/DoelMeter';
 import type { Winnaar, Doel, Ronde } from '@/lib/types';
 
@@ -26,10 +26,17 @@ export default async function HomePage() {
   const lijst = (winnaars as Winnaar[] | null) ?? [];
   const doelenLijst = (doelen as Doel[] | null) ?? [];
   const rondes = (rondesData as Ronde[] | null) ?? [];
-  // De meter telt de afgesloten rondes (+ oude losse winnaars), niet alleen de
-  // gepubliceerde winnaars — zo telt een afgesloten avond meteen mee.
-  const voortgang = maandVoortgang(bouwWeken(rondes, lijst));
+  // Maanddoel-meter: de laatste maand met een ronde telt (reset per maand),
+  // met de maand ervoor subtiel eronder.
+  const maanden = maandTotalen(rondes, lijst);
+  const { huidig, vorig } = huidigeEnVorige(maanden, new Date().toISOString().slice(0, 7));
+  const voortgang = maandVoortgang(
+    huidig ? [{ maand: huidig.maandIso, opbrengst: huidig.opbrengst }] : [],
+  );
   const huidigDoel = doelVoorMaand(doelenLijst, voortgang.maandIso);
+  const vorige = vorig
+    ? { maandNaam: maandLabel(vorig.maandIso), opgehaald: vorig.opbrengst, doel: MAANDDOEL }
+    : null;
 
   return (
     <>
@@ -49,6 +56,7 @@ export default async function HomePage() {
           voortgang={voortgang}
           doelNaam={huidigDoel?.naam}
           doelLabel="Deze maand voor"
+          vorige={vorige}
         />
       </Link>
 

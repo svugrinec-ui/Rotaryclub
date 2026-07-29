@@ -312,6 +312,33 @@ table.data th { color: var(--muted); font-size: 13px; text-transform: uppercase;
 .pill { display: inline-block; padding: 3px 10px; border-radius: 999px; font-size: 13px; font-weight: 700; }
 .pill-ok { background: #e6f6ec; color: var(--ok); }
 .pill-wait { background: #fdf1dd; color: #a4700a; }
+.pill-flag { background: #fdecec; color: #b03535; margin-left: 10px; font-size: 12px; }
+.pill-cash { background: #eef4ff; color: var(--rotary-blue); font-size: 12px; }
+
+/* Cash/bank-splitsing bij de opbrengsten. */
+.opbrengst-split {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+.split-blok {
+  padding: 8px 14px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #fff;
+}
+
+/* Inschrijvingen (batches) per persoon — tijdstip + bedrag, om dubbelen te spotten. */
+.inschrijvingen { padding: 4px 16px 0; display: flex; flex-direction: column; gap: 4px; }
+.inschrijving-regel {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  font-size: 13px;
+  padding: 4px 0;
+}
 
 /* ---------- Notices ---------- */
 .notice { padding: 12px 16px; border-radius: 10px; margin: 14px 0; font-size: 15px; }
@@ -414,6 +441,12 @@ table.data th { color: var(--muted); font-size: 13px; text-transform: uppercase;
 .doelmeter-doel strong { color: var(--rotary-blue); }
 .doelmeter-status { margin-top: 10px; font-size: 15px; color: var(--muted); }
 .doelmeter-status strong { color: var(--ink); }
+.doelmeter-vorige {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line, rgba(0, 0, 0, 0.08));
+  font-size: 13px;
+}
 
 /* Niveaus: van warm (net begonnen) naar groen (gehaald) */
 .niveau-start   .doelmeter-fill { background: linear-gradient(90deg, #f0873b, #f5a25c); }
@@ -502,6 +535,54 @@ table.data th { color: var(--muted); font-size: 13px; text-transform: uppercase;
 }
 .bundel-bedrag { font-size: 24px; font-weight: 800; color: var(--rotary-blue); }
 .bundel-loten { font-size: 14px; font-weight: 600; color: var(--muted); }
+
+.betaalwijze-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-top: 8px;
+}
+.betaalwijze-kaart {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 14px 12px;
+  border: 2px solid var(--line);
+  border-radius: 12px;
+  background: #fff;
+  cursor: pointer;
+  transition: border-color .12s ease, background .12s ease, transform .05s ease;
+}
+.betaalwijze-kaart:hover { border-color: var(--rotary-azure); }
+.betaalwijze-kaart:active { transform: translateY(1px); }
+.betaalwijze-kaart.gekozen {
+  border-color: var(--rotary-blue);
+  background: #eef4ff;
+  box-shadow: 0 0 0 3px rgba(23, 69, 143, 0.12);
+}
+.betaalwijze-titel { font-size: 16px; font-weight: 700; color: var(--rotary-blue); }
+.betaalwijze-sub { font-size: 13px; color: var(--muted); }
+
+.eigen-nummers { margin-top: 16px; }
+.eigen-nummers-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(84px, 1fr));
+  gap: 10px;
+  margin: 8px 0 6px;
+}
+.eigen-nummers-grid input { text-align: center; font-weight: 700; }
+.eigen-nummers-grid input.nummer-bezet {
+  border-color: #d64545;
+  box-shadow: 0 0 0 2px rgba(214, 69, 69, 0.18);
+}
+.meedoen-knoppen {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+.meedoen-knoppen .btn-vol { width: 100%; }
 
 /* ---------- Betaalstap (meedoen) ---------- */
 .betaal-qr {

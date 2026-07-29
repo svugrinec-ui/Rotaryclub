@@ -35,6 +35,8 @@ create table if not exists public.loten (
   contact     text,                                -- optioneel: e-mail of telefoon
   betaald     boolean not null default false,      -- door commissie afgevinkt
   betaald_op  timestamptz,
+  betaalwijze text not null default 'bank'          -- 'bank' of 'cash'
+                check (betaalwijze in ('bank', 'cash')),
   created_at  timestamptz not null default now(),
   unique (ronde_id, lotnummer)
 );
@@ -63,6 +65,18 @@ create table if not exists public.doelen (
   created_at   timestamptz not null default now()
 );
 
+-- Instellingen: één rij met penningmeester (naam/e-mail) en mail-afzender.
+create table if not exists public.instellingen (
+  id                   int primary key default 1 check (id = 1),
+  penningmeester_naam  text,
+  penningmeester_email text,
+  afzender             text,
+  mail_intro           text,
+  mail_afsluiting      text,
+  updated_at           timestamptz not null default now()
+);
+insert into public.instellingen (id) values (1) on conflict (id) do nothing;
+
 -- --- Indexen -------------------------------------------------------------
 create index if not exists loten_ronde_idx    on public.loten (ronde_id);
 create index if not exists exp_ronde_idx      on public.experiences (ronde_id);
@@ -79,6 +93,7 @@ alter table public.experiences enable row level security;
 alter table public.loten       enable row level security;
 alter table public.winnaars    enable row level security;
 alter table public.doelen      enable row level security;
+alter table public.instellingen enable row level security; -- geen select-policy: alleen server-side
 
 -- Gepubliceerde winnaars: openbaar leesbaar.
 drop policy if exists "winnaars publiek leesbaar" on public.winnaars;

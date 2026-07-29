@@ -3,7 +3,8 @@ import { redirect, notFound } from 'next/navigation';
 import { isAdmin } from '@/lib/auth';
 import { serviceClient } from '@/lib/supabase';
 import type { Winnaar } from '@/lib/types';
-import { wijzigWinnaar } from '@/lib/actions';
+import { wijzigWinnaar, verwijderWinnaar } from '@/lib/actions';
+import ConfirmButton from '@/components/ConfirmButton';
 
 export const dynamic = 'force-dynamic';
 
@@ -74,6 +75,27 @@ export default async function WinnaarBewerkPage({
           </button>
         </div>
       </form>
+
+      <details style={{ marginTop: 28 }}>
+        <summary className="muted" style={{ cursor: 'pointer', fontSize: 14 }}>
+          Winnaar verwijderen
+        </summary>
+        <div className="panel" style={{ marginTop: 10 }}>
+          <p className="muted" style={{ marginTop: 0 }}>
+            Haalt deze winnaar uit de galerij — definitief. Wil je 'm alleen
+            tijdelijk verbergen, gebruik dan “Verberg” in het overzicht.
+          </p>
+          <form action={verwijderWinnaar}>
+            <input type="hidden" name="id" value={w.id} />
+            <ConfirmButton
+              className="btn btn-danger btn-sm"
+              message={`Winnaar "${w.naam}" verwijderen uit de galerij?`}
+            >
+              Ja, verwijder deze winnaar
+            </ConfirmButton>
+          </form>
+        </div>
+      </details>
     </>
   );
 }

@@ -66,6 +66,23 @@ async function syncRondeOpbrengst(rondeId: string): Promise<number> {
   return opbrengst;
 }
 
+// ---------- Instellingen ----------
+export async function wijzigInstellingen(fd: FormData) {
+  await assertAdmin();
+  await serviceClient()
+    .from('instellingen')
+    .upsert({
+      id: 1,
+      penningmeester_naam: str(fd, 'penningmeester_naam') || null,
+      penningmeester_email: str(fd, 'penningmeester_email') || null,
+      afzender: str(fd, 'afzender') || null,
+      mail_intro: str(fd, 'mail_intro') || null,
+      mail_afsluiting: str(fd, 'mail_afsluiting') || null,
+      updated_at: new Date().toISOString(),
+    });
+  revalidatePath('/beheer');
+}
+
 // ---------- Auth ----------
 export async function login(fd: FormData) {
   const password = str(fd, 'password');
@@ -140,6 +157,8 @@ export async function verwijderRonde(fd: FormData) {
   revalidatePath('/meedoen');
   revalidatePath('/');
   revalidatePath('/goede-doelen');
+  // De rondepagina bestaat nu niet meer — terug naar het overzicht.
+  redirect('/beheer');
 }
 
 // ---------- Experiences ----------
@@ -211,6 +230,23 @@ export async function verwijderLot(fd: FormData) {
   if (!id) return;
   await serviceClient().from('loten').delete().eq('id', id);
   if (ronde_id) await syncRondeOpbrengst(ronde_id);
+  revalidatePath(`/beheer/ronde/${ronde_id}`);
+  revalidatePath('/');
+  revalidatePath('/goede-doelen');
+}
+
+/** Alle loten van één persoon in een ronde wissen (bijv. dubbele inschrijving). */
+export async function verwijderPersoonLoten(fd: FormData) {
+  await assertAdmin();
+  const ronde_id = str(fd, 'ronde_id');
+  const naam = str(fd, 'naam');
+  if (!ronde_id || !naam) return;
+  await serviceClient()
+    .from('loten')
+    .delete()
+    .eq('ronde_id', ronde_id)
+    .eq('naam', naam);
+  await syncRondeOpbrengst(ronde_id);
   revalidatePath(`/beheer/ronde/${ronde_id}`);
   revalidatePath('/');
   revalidatePath('/goede-doelen');
@@ -335,6 +371,8 @@ export async function verwijderWinnaar(fd: FormData) {
   await serviceClient().from('winnaars').delete().eq('id', id);
   revalidatePath('/beheer');
   revalidatePath('/');
+  revalidatePath('/goede-doelen');
+  redirect('/beheer');
 }
 
 // ---------- Goede doelen ----------
