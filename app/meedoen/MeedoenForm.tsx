@@ -241,7 +241,10 @@ export default function MeedoenForm({ rondeId }: Props) {
             {resultaat.nummers.length > 1 ? 'nummers' : 'nummer'}:
           </small>
           <div className="nummer">{resultaat.nummers.join(' · ')}</div>
-          <small>Je doet mee met de trekking — bij het trekken roepen we ook de naam om.</small>
+          <small>
+            <strong>Je loten staan vast</strong> — je doet mee met de trekking, óók als je
+            dit scherm wegklikt. Bij het trekken roepen we de naam om.
+          </small>
         </div>
 
         <div className="panel" style={{ textAlign: 'center', marginTop: 28 }}>
@@ -315,7 +318,15 @@ export default function MeedoenForm({ rondeId }: Props) {
           )}
         </div>
 
-        <div style={{ textAlign: 'center', marginTop: 8 }}>
+        <p
+          className="muted"
+          style={{ textAlign: 'center', fontSize: 14, marginTop: 14, marginBottom: 0 }}
+        >
+          Na het betalen kom je hier gewoon terug. Nummers kwijt? Zoek ze onderaan
+          deze pagina op met je naam.
+        </p>
+
+        <div style={{ textAlign: 'center', marginTop: 12 }}>
           <button className="btn btn-gold" onClick={opnieuw}>
             Nog iemand inschrijven
           </button>

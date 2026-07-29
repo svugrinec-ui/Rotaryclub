@@ -1,4 +1,4 @@
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import Link from 'next/link';
 import { IconSettings } from '@/components/Icons';
 import './globals.css';
@@ -7,6 +7,16 @@ export const metadata: Metadata = {
   title: 'Rotary Experiences — Loterij Soest-Baarn',
   description:
     'Winnaars, goede doelen en digitale loten van de dinsdagavondloterij van Rotary Club Soest-Baarn.',
+  // "Zet op beginscherm" op de iPhone: schermvullend, eigen naam onder het icoon.
+  appleWebApp: {
+    capable: true,
+    title: 'Loterij',
+    statusBarStyle: 'black-translucent',
+  },
+};
+
+export const viewport: Viewport = {
+  themeColor: '#17458f',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
