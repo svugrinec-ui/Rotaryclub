@@ -26,10 +26,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <header className="site-header">
           <div className="container header-inner">
             <Link href="/" className="brand">
-              <span className="brand-wheel" aria-hidden>⚙</span>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img className="brand-wheel" src="/RotaryMoE-R_CMYK-C.png" alt="" aria-hidden />
+
               <span className="brand-text">
-                Rotary <strong>Experiences</strong>
-                <small>Club Soest-Baarn</small>
+                <strong>Loterij</strong>
+                <small>Rotary Club Soest-Baarn</small>
               </span>
             </Link>
             <nav className="site-nav">

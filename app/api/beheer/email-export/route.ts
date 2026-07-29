@@ -85,10 +85,10 @@ function mailHtml(
             <td style="background-color:#17458f;background-image:linear-gradient(135deg,#17458f,#0f2f66);padding:26px 32px;">
               <table role="presentation" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">
                 <tr>
-                  <td style="font-size:36px;line-height:36px;color:#f7a81b;padding-right:16px;vertical-align:middle;">&#9881;</td>
+                  <td style="padding-right:16px;vertical-align:middle;"><img src="https://loterij.rotarysoestbaarn.nl/RotaryMoE-R_CMYK-C.png" width="46" height="46" alt="" style="display:block;" /></td>
                   <td style="vertical-align:middle;">
-                    <div style="color:#ffffff;font-size:24px;font-weight:800;letter-spacing:.2px;">Rotary Loterij</div>
-                    <div style="color:#bcd0f0;font-size:16px;font-weight:600;margin-top:2px;">Soest-Baarn</div>
+                    <div style="color:#ffffff;font-size:26px;font-weight:800;letter-spacing:.2px;">Loterij</div>
+                    <div style="color:#bcd0f0;font-size:15px;font-weight:600;margin-top:2px;">Rotary Club Soest-Baarn</div>
                   </td>
                 </tr>
               </table>
