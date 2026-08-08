@@ -123,7 +123,9 @@ section { margin: 40px 0; }
   flex-direction: column;
 }
 .card-photo {
-  aspect-ratio: 4 / 3;
+  /* Vierkant: staande én liggende foto's vullen het vlak zonder veel te
+     verliezen, en alle kaarten in de rij zijn even hoog. */
+  aspect-ratio: 1 / 1;
   background: #eef2f8 center/cover no-repeat;
   display: flex;
   align-items: center;
@@ -131,6 +133,46 @@ section { margin: 40px 0; }
   color: var(--rotary-blue);
 }
 .card-photo .placeholder { font-size: 40px; opacity: .4; }
+
+/* Meerdere foto's per winnaar: carrousel die vanzelf doorloopt. */
+.carrousel { position: relative; overflow: hidden; }
+/* De hele foto blijft zichtbaar (contain); wat overblijft van het 4:3-vlak
+   vullen we met een uitvergrote, vervaagde versie van diezelfde foto. Zo
+   worden staande telefoonfoto's niet doormidden gesneden. */
+.carrousel-foto {
+  position: absolute;
+  inset: 0;
+  /* Iets boven het midden uitsnijden: op groepsfoto's staan de gezichten in
+     de bovenste helft, dus daar mag niet af. */
+  background: var(--foto) center 28% / cover no-repeat;
+  opacity: 0;
+  transition: opacity .8s ease;
+}
+.carrousel-foto.actief { opacity: 1; }
+.carrousel-dots {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 9px;
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+}
+.carrousel-dots button {
+  width: 7px;
+  height: 7px;
+  padding: 0;
+  border-radius: 999px;
+  border: 1px solid rgba(0, 0, 0, .22);
+  background: rgba(255, 255, 255, .6);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, .18);
+  cursor: pointer;
+  transition: background .2s ease, transform .2s ease;
+}
+.carrousel-dots button.actief { background: #fff; transform: scale(1.35); }
+@media (prefers-reduced-motion: reduce) {
+  .carrousel-foto { transition: none; }
+}
 .card-body { padding: 16px 18px 20px; }
 .card .maand {
   display: inline-block;
@@ -250,6 +292,30 @@ textarea { min-height: 90px; resize: vertical; }
 .btn-danger:hover { background: #922f2f; }
 .btn-sm { padding: 7px 12px; font-size: 14px; }
 .btn-vol { width: 100%; }
+
+/* ---------- Foto's van een winnaar beheren ---------- */
+.foto-beheer {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 14px;
+  margin-top: 10px;
+}
+.foto-beheer-item {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+}
+.foto-beheer-item img {
+  width: 100%;
+  /* Zelfde uitsnede als in de galerij, zodat je hier ziet wat er straks staat. */
+  aspect-ratio: 1 / 1;
+  object-fit: cover;
+  object-position: center 28%;
+  background: #eef2f8;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+}
 
 /* ---------- Inklapbaar beheer-blok ---------- */
 .beheer-inklap {
@@ -508,6 +574,31 @@ table.data th { color: var(--muted); font-size: 13px; text-transform: uppercase;
   box-shadow: 0 4px 10px rgba(23, 69, 143, 0.28);
 }
 
+/* Vier stappen op een telefoon: iets compacter zodat ze op één rij passen. */
+.stappen li { width: 88px; }
+@media (max-width: 460px) {
+  .stappen { gap: 4px; }
+  .stappen li { width: 74px; font-size: 11.5px; }
+  .stap-icon { width: 44px; height: 44px; }
+}
+
+/* Op het donkere live-scherm van de trekking. */
+.stappen.donker { margin-bottom: 10px; }
+.stappen.donker li { color: #8ba3ce; }
+.stappen.donker .stap-num { color: #b9caea; }
+.stappen.donker .stap-icon {
+  background: rgba(255, 255, 255, .1);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .16);
+  color: #cddaf1;
+}
+.stappen.donker li.actief { color: #fff; }
+.stappen.donker li.actief .stap-num { color: var(--rotary-gold); }
+.stappen.donker li.actief .stap-icon {
+  background: var(--rotary-gold);
+  color: #3a2600;
+  box-shadow: 0 4px 12px rgba(244, 164, 22, .35);
+}
+
 /* ---------- Bundelkeuze ---------- */
 .bundel-grid {
   display: grid;
@@ -697,21 +788,110 @@ table.data th { color: var(--muted); font-size: 13px; text-transform: uppercase;
 /* ---------- Lot-bevestiging ---------- */
 .lot-badge {
   text-align: center;
-  background: linear-gradient(135deg, var(--rotary-blue), var(--rotary-blue-dark));
+  /* Zelfde vlak als het live-scherm van de trekking, zodat "jouw loten" bij
+     het kopen en bij het trekken exact hetzelfde oogt. */
+  background: radial-gradient(circle at 50% 26%, #1f4a97, #0c1d40 72%);
   color: #fff;
   border-radius: var(--radius);
-  padding: 32px;
+  padding: 30px 24px;
   margin: 20px 0;
 }
-.lot-badge .nummer {
-  font-size: clamp(32px, 9vw, 60px);
-  font-weight: 900;
-  color: var(--rotary-gold);
-  line-height: 1.15;
-  margin: 8px 0;
-  word-break: break-word;
-}
+.lot-badge .lot-blok { margin: 12px 0; }
 .lot-badge small { color: #cdd9ef; }
+
+/* ---------- Lotnummers: één weergave, overal hetzelfde ----------
+   Bij het kopen (groot), bij het opzoeken en tijdens de trekking (compact).
+   Zo herkent iedereen zijn eigen loten in dezelfde vorm terug. */
+.lot-blok { width: 100%; }
+.lot-blok-kop {
+  font-size: 13px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  color: var(--muted);
+  margin-bottom: 8px;
+}
+.lot-blok.donker .lot-blok-kop { color: #9fb4dc; }
+.lot-rij {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+}
+.lot-chip {
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  font-size: 16px;
+  padding: 7px 12px;
+  border-radius: 10px;
+  background: #eef2f8;
+  color: var(--rotary-blue);
+  border: 1px solid var(--line);
+}
+.lot-blok.donker .lot-chip {
+  background: rgba(255, 255, 255, .13);
+  color: #fff;
+  border-color: rgba(255, 255, 255, .2);
+}
+/* Alleen een maatje groter op het moment dat je je loten krijgt — kleur,
+   vorm en rand blijven exact gelijk aan die tijdens de trekking. Goud is
+   voorbehouden aan het lot dat net getrokken is. */
+.lot-rij.groot { gap: 9px; margin: 12px 0; }
+.lot-rij.groot .lot-chip {
+  font-size: clamp(19px, 4.6vw, 22px);
+  padding: 9px 14px;
+}
+.lot-chip.gewonnen,
+.lot-blok.donker .lot-chip.gewonnen {
+  background: var(--rotary-gold);
+  border-color: #c98a00;
+  color: #3a2600;
+  animation: trekPop .5s ease;
+  transform: scale(1.08);
+}
+/* Tijdens de onthulling: afgevallen loten dimmen, kanshebbers lichten op. */
+.lot-chip {
+  transition: opacity .45s ease, transform .45s ease, background .3s ease,
+    border-color .3s ease;
+}
+.lot-chip.af { opacity: .18; transform: scale(.9); }
+.lot-chip.kans {
+  background: rgba(244, 164, 22, .22);
+  border-color: rgba(244, 164, 22, .55);
+}
+.lot-blok:not(.donker) .lot-chip.kans {
+  background: #fdf1d8;
+  border-color: var(--rotary-gold);
+}
+@media (prefers-reduced-motion: reduce) {
+  .lot-chip.gewonnen { animation: none; }
+  .lot-chip { transition: none; }
+}
+
+/* ---------- Lotnummer dat cijfer voor cijfer verschijnt ---------- */
+.cijferrij {
+  display: flex;
+  justify-content: center;
+  align-items: baseline;
+  gap: 1px;
+}
+.cijferrij .cijfer { display: inline-block; min-width: .62em; }
+.cijferrij .cijfer.leeg { color: currentColor; opacity: .22; }
+.cijferrij .cijfer.nieuw { animation: cijferPop .42s ease; }
+@keyframes cijferPop {
+  0% { transform: translateY(-.14em) scale(.6); opacity: 0; }
+  60% { transform: translateY(0) scale(1.16); }
+  100% { transform: none; opacity: 1; }
+}
+.live-kans {
+  margin-top: 12px;
+  color: #cddaf1;
+  font-size: 15px;
+}
+.live-kans strong { color: var(--rotary-gold); font-size: 18px; }
+@media (prefers-reduced-motion: reduce) {
+  .cijferrij .cijfer.nieuw { animation: none; }
+}
 
 /* ---------- Trekking (presentatie) ---------- */
 .btn-groot { padding: 16px 30px; font-size: 20px; border-radius: 14px; }
@@ -805,6 +985,209 @@ table.data th { color: var(--muted); font-size: 13px; text-transform: uppercase;
   border-radius: 10px;
   background: #f7f9fc;
   font-size: 16px;
+}
+
+/* ---------- Live meekijken (publiek, /live) ---------- */
+.live-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: #fff;
+  background: #d64545;
+  padding: 4px 10px;
+  border-radius: 999px;
+}
+.live-badge::before {
+  content: '';
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #fff;
+  animation: livePuls 1.4s ease-in-out infinite;
+}
+@keyframes livePuls {
+  0%, 100% { opacity: 1; }
+  50% { opacity: .25; }
+}
+
+.live-wacht { text-align: center; padding: 40px 0 20px; }
+.live-wacht h1 { margin: 14px 0 8px; }
+
+/* Het live-scherm is een moment: donker, zoals de show in de zaal. */
+.live-show {
+  position: relative;
+  min-height: 72vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 26px 18px 32px;
+  gap: 10px;
+  border-radius: var(--radius);
+  background: radial-gradient(circle at 50% 26%, #1f4a97, #0c1d40 72%);
+  color: #fff;
+  overflow: hidden;
+}
+
+/* Op elke pagina: schuift over de inhoud zodra er getrokken wordt. */
+.live-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 900;
+  overflow-y: auto;
+  background: #0c1d40;
+  animation: liveIn .35s ease both;
+}
+.live-overlay .live-show {
+  border-radius: 0;
+  min-height: 100vh;
+  min-height: 100dvh;
+  justify-content: center;
+}
+@keyframes liveIn {
+  0% { opacity: 0; transform: translateY(14px); }
+  100% { opacity: 1; transform: none; }
+}
+
+.live-kop {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: center;
+  padding: 0 8px;
+}
+.live-ronde { color: #b9caea; font-weight: 700; }
+.live-prijsnr {
+  text-transform: uppercase;
+  letter-spacing: .12em;
+  font-size: 12px;
+  color: #9fb4dc;
+  margin-top: 6px;
+}
+.live-prijs {
+  font-size: clamp(20px, 5.5vw, 32px);
+  font-weight: 800;
+  color: #fff;
+  max-width: 620px;
+}
+/* Beker meelopen in de tekst, niet als losse kolom ernaast. */
+.live-prijs svg { vertical-align: -2px; margin-right: 6px; }
+.live-prijs.hoofd { color: var(--rotary-gold); }
+.live-nummer {
+  font-size: clamp(64px, 22vw, 150px);
+  font-weight: 900;
+  line-height: 1.05;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -.02em;
+  color: #fff;
+}
+.live-nummer.rollen { color: #aebfe4; opacity: .85; }
+/* Nog niets te zien: gedempt en kleiner, zodat het niet als "laden" leest. */
+.live-nummer.wacht {
+  color: #6f8bbd;
+  opacity: .5;
+  font-size: clamp(40px, 13vw, 84px);
+  letter-spacing: .04em;
+}
+.live-nummer.onthuld { color: var(--rotary-gold); animation: trekPop .55s ease; }
+.live-status { color: #b9caea; font-size: 16px; }
+.live-status.zacht { color: #9fb4dc; }
+.live-winnaar {
+  font-size: clamp(24px, 7vw, 44px);
+  font-weight: 800;
+  animation: trekPop .55s ease .05s both;
+}
+.live-jij {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  padding: 12px 18px;
+  border-radius: 999px;
+  background: linear-gradient(135deg, var(--rotary-gold), #e08c00);
+  color: #3a2600;
+  font-weight: 800;
+  font-size: 18px;
+}
+
+.live-mijn, .live-zoek {
+  margin-top: auto;
+  padding-top: 22px;
+  width: 100%;
+  max-width: 520px;
+}
+/* Vóór de eerste trekking is er nog niets te zien: dan hoeven de eigen loten
+   niet onderaan het scherm te plakken. */
+.live-show.wachtstand .live-mijn,
+.live-show.wachtstand .live-zoek { margin-top: 26px; }
+.live-show.wachtstand { justify-content: flex-start; }
+.live-mijn-kop {
+  font-size: 13px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  color: #9fb4dc;
+  margin-bottom: 8px;
+}
+.live-zoek { text-align: left; }
+.live-show .live-zoek label { color: #b9caea; }
+
+/* Confetti bij een eigen winnend lot. */
+.confetti {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+  z-index: 1000; /* ook boven het live-overlay */
+}
+.confetti span {
+  position: absolute;
+  top: -12px;
+  width: 9px;
+  height: 14px;
+  border-radius: 2px;
+  animation-name: confettiVal;
+  animation-timing-function: linear;
+  animation-iteration-count: 1;
+  animation-fill-mode: forwards;
+}
+@keyframes confettiVal {
+  0% { transform: translateY(-20px) rotate(0deg); opacity: 1; }
+  100% { transform: translateY(105vh) rotate(540deg); opacity: .9; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .confetti { display: none; }
+  .live-nummer.onthuld, .live-winnaar { animation: none; }
+}
+
+/* ---------- Live maandmeter (bedrag dat er net bijkwam) ---------- */
+.live-meter { position: relative; transition: transform .3s ease; }
+.live-meter.groeit { transform: scale(1.012); }
+.live-bump {
+  position: absolute;
+  top: 10px;
+  right: 14px;
+  background: #1f9d55;
+  color: #fff;
+  font-weight: 800;
+  font-size: 14px;
+  padding: 5px 11px;
+  border-radius: 999px;
+  box-shadow: 0 4px 12px rgba(31, 157, 85, .3);
+  animation: bumpIn .4s ease both;
+}
+@keyframes bumpIn {
+  0% { transform: translateY(-8px) scale(.8); opacity: 0; }
+  100% { transform: translateY(0) scale(1); opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .live-meter.groeit { transform: none; }
+  .live-bump { animation: none; }
 }
 
 /* ---------- Draw / winnaar trekken ---------- */

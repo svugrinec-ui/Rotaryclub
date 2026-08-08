@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next';
 import Link from 'next/link';
 import { IconSettings } from '@/components/Icons';
+import TrekkingLiveOverlay from '@/components/TrekkingLiveOverlay';
 import './globals.css';
 
 export const metadata: Metadata = {
@@ -50,6 +51,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           </div>
         </header>
         <main className="container">{children}</main>
+
+        {/* Trekking bezig? Dan komt die vanzelf in beeld, op welke pagina de
+            bezoeker ook zit. Staat uit op /beheer en /live. */}
+        <TrekkingLiveOverlay />
         <footer className="site-footer">
           <div className="container">
             <p>Rotary Club Soest-Baarn · Loterijcommissie</p>

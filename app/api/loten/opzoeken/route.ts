@@ -3,11 +3,16 @@ import { serviceClient } from '@/lib/supabase';
 
 export const runtime = 'nodejs';
 
-// Zoekt de lotnummers van een naam, maar ALLEEN in de lopende (open) ronde.
+// Zoekt de lotnummers van een naam in de lopende (open) ronde. Met `ronde_id`
+// kan het ook een andere ronde zijn — de live-trekking gebruikt dat, want die
+// ronde is dan meestal al gesloten.
 export async function POST(req: Request) {
   let naam = '';
+  let rondeIdParam = '';
   try {
-    naam = ((await req.json()).naam ?? '').toString().trim();
+    const body = await req.json();
+    naam = (body.naam ?? '').toString().trim();
+    rondeIdParam = (body.ronde_id ?? '').toString().trim();
   } catch {
     /* leeg */
   }
@@ -17,12 +22,13 @@ export async function POST(req: Request) {
 
   const sb = serviceClient();
 
-  const { data: rondes } = await sb
-    .from('rondes')
-    .select('id, naam')
-    .eq('status', 'open')
-    .order('maand', { ascending: false })
-    .limit(1);
+  const vraag = sb.from('rondes').select('id, naam');
+  const { data: rondes } = rondeIdParam
+    ? await vraag.eq('id', rondeIdParam).limit(1)
+    : await vraag
+        .eq('status', 'open')
+        .order('maand', { ascending: false })
+        .limit(1);
   const ronde = rondes?.[0];
   if (!ronde) {
     return NextResponse.json(
@@ -40,6 +46,7 @@ export async function POST(req: Request) {
 
   return NextResponse.json({
     ronde: ronde.naam,
+    ronde_id: ronde.id,
     nummers: (loten ?? []).map((l) => l.lotnummer),
   });
 }

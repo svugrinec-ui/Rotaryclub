@@ -41,10 +41,32 @@ export interface Winnaar {
   experience_titel: string;
   aanbieder: string | null; // wie de experience aanbood
   toelichting: string | null;
-  foto_url: string | null;
+  foto_url: string | null; // eerste foto; blijft bestaan voor de compacte weergaves
+  foto_urls: string[] | null; // alle foto's, op volgorde (carrousel in de galerij)
   opbrengst: number; // opbrengst voor het goede doel in deze loterijweek
   gepubliceerd: boolean;
   created_at: string;
+}
+
+/** Fase van de live trekking; de beheerder zet deze door tijdens de show. */
+export type TrekkingFase = 'wachten' | 'rollen' | 'onthuld' | 'klaar';
+
+/**
+ * De stand van de trekking, één rij per ronde. De beheerder schrijft; alle
+ * telefoons lezen mee via Supabase Realtime. Bevat geen deelnemerslijst —
+ * alleen de prijs die nu getrokken wordt en het winnende lot.
+ */
+export interface TrekkingLive {
+  ronde_id: string;
+  fase: TrekkingFase;
+  prijs_label: string | null;
+  prijs_index: number; // 0-based
+  prijs_totaal: number;
+  hoofdprijs: boolean;
+  winnaar_lotnummer: number | null;
+  winnaar_naam: string | null;
+  pool_nummers: number[]; // voor de rol-animatie op de telefoons
+  bijgewerkt_op: string;
 }
 
 export interface Instellingen {

@@ -5,6 +5,8 @@ import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { serviceClient } from '@/lib/supabase';
+import { winnaarFotos } from '@/lib/fotos';
+import { rondeOpbrengst, syncRondeOpbrengst } from '@/lib/ronde-opbrengst';
 import {
   ADMIN_COOKIE,
   cookieOptions,
@@ -44,26 +46,25 @@ async function uploadFoto(
   return sb.storage.from('fotos').getPublicUrl(pad).data.publicUrl;
 }
 
-/** Som van de betaalde loten van een ronde = de opbrengst van die (week-)ronde. */
-async function rondeOpbrengst(rondeId: string): Promise<number> {
-  const { data } = await serviceClient()
-    .from('loten')
-    .select('bedrag')
-    .eq('ronde_id', rondeId)
-    .eq('betaald', true);
-  const som = (data ?? []).reduce((s, l) => s + Number(l.bedrag ?? 0), 0);
-  return Math.round(som * 100) / 100;
-}
-
 /**
- * Schrijft de actuele opbrengst (som van de betaalde loten) naar de ronde zelf.
- * Bron van waarheid voor het publieke totaal; roep dit aan zodra betalingen
- * wijzigen (afvinken, lot verwijderen, ronde sluiten).
+ * Uploadt alle gekozen bestanden uit één file-veld en geeft de publieke URL's
+ * terug, in dezelfde volgorde als ze gekozen zijn. Lege velden leveren [].
  */
-async function syncRondeOpbrengst(rondeId: string): Promise<number> {
-  const opbrengst = await rondeOpbrengst(rondeId);
-  await serviceClient().from('rondes').update({ opbrengst }).eq('id', rondeId);
-  return opbrengst;
+async function uploadFotos(
+  sb: SupabaseClient,
+  fd: FormData,
+  veld: string,
+  prefix: string,
+): Promise<string[]> {
+  const bestanden = fd
+    .getAll(veld)
+    .filter((f): f is File => f instanceof File && f.size > 0);
+  const urls: string[] = [];
+  for (const bestand of bestanden) {
+    const url = await uploadFoto(sb, bestand, prefix);
+    if (url) urls.push(url);
+  }
+  return urls;
 }
 
 // ---------- Instellingen ----------
@@ -253,6 +254,32 @@ export async function verwijderPersoonLoten(fd: FormData) {
 }
 
 // ---------- Winnaars ----------
+
+/** De huidige fotoreeks van een winnaar (oude losse foto telt als de eerste). */
+async function huidigeFotos(sb: SupabaseClient, id: string): Promise<string[]> {
+  const { data } = await sb
+    .from('winnaars')
+    .select('foto_url, foto_urls')
+    .eq('id', id)
+    .single();
+  return winnaarFotos({
+    foto_url: data?.foto_url ?? null,
+    foto_urls: data?.foto_urls ?? null,
+  });
+}
+
+/** Bewaart een gewijzigde fotoreeks; `foto_url` blijft gelijk aan de eerste foto. */
+async function bewaarFotos(sb: SupabaseClient, id: string, fotos: string[]) {
+  await sb
+    .from('winnaars')
+    .update({ foto_urls: fotos, foto_url: fotos[0] ?? null })
+    .eq('id', id);
+  revalidatePath('/beheer');
+  revalidatePath(`/beheer/winnaar/${id}`);
+  revalidatePath('/');
+  revalidatePath('/goede-doelen');
+}
+
 export async function maakWinnaar(fd: FormData) {
   await assertAdmin();
   const naam = str(fd, 'naam');
@@ -263,19 +290,9 @@ export async function maakWinnaar(fd: FormData) {
 
   const sb = serviceClient();
 
-  let foto_url: string | null = null;
-  const foto = fd.get('foto');
-  if (foto instanceof File && foto.size > 0) {
-    const ext = foto.name.split('.').pop()?.toLowerCase() || 'jpg';
-    const pad = `winnaars/${maand}-${crypto.randomUUID()}.${ext}`;
-    const bytes = new Uint8Array(await foto.arrayBuffer());
-    const { error: upErr } = await sb.storage
-      .from('fotos')
-      .upload(pad, bytes, { contentType: foto.type || 'image/jpeg', upsert: true });
-    if (!upErr) {
-      foto_url = sb.storage.from('fotos').getPublicUrl(pad).data.publicUrl;
-    }
-  }
+  // Eén of meer foto's: de eerste is ook de losse foto_url (voor de plekken
+  // die er maar één tonen), de hele reeks gaat de carrousel in.
+  const fotos = await uploadFotos(sb, fd, 'foto', `winnaars/${maand}`);
 
   // Hangt de winnaar aan een ronde? Dan komt de weekopbrengst automatisch uit
   // de betalingen van die ronde. Anders het (handmatige) veld.
@@ -291,7 +308,8 @@ export async function maakWinnaar(fd: FormData) {
     ronde_id,
     toelichting: str(fd, 'toelichting') || null,
     opbrengst,
-    foto_url,
+    foto_url: fotos[0] ?? null,
+    foto_urls: fotos,
     gepubliceerd: true,
   });
   revalidatePath('/goede-doelen');
@@ -320,17 +338,12 @@ export async function wijzigWinnaar(fd: FormData) {
     toelichting: str(fd, 'toelichting') || null,
   };
 
-  const foto = fd.get('foto');
-  if (foto instanceof File && foto.size > 0) {
-    const ext = foto.name.split('.').pop()?.toLowerCase() || 'jpg';
-    const pad = `winnaars/${maand}-${crypto.randomUUID()}.${ext}`;
-    const bytes = new Uint8Array(await foto.arrayBuffer());
-    const { error: upErr } = await sb.storage
-      .from('fotos')
-      .upload(pad, bytes, { contentType: foto.type || 'image/jpeg', upsert: true });
-    if (!upErr) {
-      update.foto_url = sb.storage.from('fotos').getPublicUrl(pad).data.publicUrl;
-    }
+  // Nieuwe foto's komen achter de bestaande reeks; verwijderen doe je per foto.
+  const nieuwe = await uploadFotos(sb, fd, 'foto', `winnaars/${maand}`);
+  if (nieuwe.length > 0) {
+    const fotos = [...(await huidigeFotos(sb, id)), ...nieuwe];
+    update.foto_urls = fotos;
+    update.foto_url = fotos[0] ?? null;
   }
 
   await sb.from('winnaars').update(update).eq('id', id);
@@ -338,6 +351,33 @@ export async function wijzigWinnaar(fd: FormData) {
   revalidatePath(`/beheer/winnaar/${id}`);
   revalidatePath('/');
   revalidatePath('/goede-doelen');
+}
+
+/** Haalt één foto uit de reeks van een winnaar. */
+export async function verwijderWinnaarFoto(fd: FormData) {
+  await assertAdmin();
+  const id = str(fd, 'id');
+  const url = str(fd, 'url');
+  if (!id || !url) return;
+  const sb = serviceClient();
+  const fotos = await huidigeFotos(sb, id);
+  await bewaarFotos(
+    sb,
+    id,
+    fotos.filter((f) => f !== url),
+  );
+}
+
+/** Zet één foto vooraan: die opent de carrousel en is de losse voorbeeldfoto. */
+export async function zetWinnaarFotoVoorop(fd: FormData) {
+  await assertAdmin();
+  const id = str(fd, 'id');
+  const url = str(fd, 'url');
+  if (!id || !url) return;
+  const sb = serviceClient();
+  const fotos = await huidigeFotos(sb, id);
+  if (!fotos.includes(url)) return;
+  await bewaarFotos(sb, id, [url, ...fotos.filter((f) => f !== url)]);
 }
 
 /** Werkt alleen de weekopbrengst van één winnaar bij (snel bewerken vanaf het overzicht). */

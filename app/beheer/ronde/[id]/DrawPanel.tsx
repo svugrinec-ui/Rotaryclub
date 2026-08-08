@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { maakWinnaar } from '@/lib/actions';
 import { IconTrophy } from '@/components/Icons';
+import FotoKiezer from '@/components/FotoKiezer';
 
 interface Props {
   rondeId: string;
@@ -118,8 +119,8 @@ export default function DrawPanel({ rondeId, datum, experiences }: Props) {
               )}
               <label>Toelichting (optioneel)</label>
               <textarea name="toelichting" placeholder="Kort verhaaltje bij de foto" />
-              <label>Foto (optioneel)</label>
-              <input name="foto" type="file" accept="image/*" />
+              <label>Foto&apos;s (optioneel) — meerdere tegelijk mag</label>
+              <FotoKiezer multiple />
               <div style={{ marginTop: 16 }}>
                 <button className="btn" type="submit">
                   Publiceren in galerij

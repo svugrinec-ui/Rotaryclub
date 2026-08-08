@@ -49,7 +49,8 @@ create table if not exists public.winnaars (
   naam             text not null,                  -- naam van de winnaar
   experience_titel text not null,                  -- welke ervaring
   toelichting      text,                           -- kort verhaaltje bij de foto
-  foto_url         text,                           -- Supabase Storage URL
+  foto_url         text,                           -- eerste foto (Supabase Storage URL)
+  foto_urls        text[] not null default '{}',   -- alle foto's, op volgorde (carrousel)
   gepubliceerd     boolean not null default true,
   created_at       timestamptz not null default now()
 );

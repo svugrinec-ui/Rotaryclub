@@ -3,8 +3,15 @@ import { redirect, notFound } from 'next/navigation';
 import { isAdmin } from '@/lib/auth';
 import { serviceClient } from '@/lib/supabase';
 import type { Winnaar } from '@/lib/types';
-import { wijzigWinnaar, verwijderWinnaar } from '@/lib/actions';
+import {
+  wijzigWinnaar,
+  verwijderWinnaar,
+  verwijderWinnaarFoto,
+  zetWinnaarFotoVoorop,
+} from '@/lib/actions';
+import { winnaarFotos } from '@/lib/fotos';
 import ConfirmButton from '@/components/ConfirmButton';
+import FotoKiezer from '@/components/FotoKiezer';
 
 export const dynamic = 'force-dynamic';
 
@@ -23,6 +30,7 @@ export default async function WinnaarBewerkPage({
     .single();
   const w = data as Winnaar | null;
   if (!w) notFound();
+  const fotos = winnaarFotos(w);
 
   return (
     <>
@@ -31,20 +39,49 @@ export default async function WinnaarBewerkPage({
       </p>
       <h1>Winnaar bewerken</h1>
 
+      {fotos.length > 0 && (
+        <div className="panel">
+          <label>
+            Foto&apos;s in de galerij ({fotos.length})
+          </label>
+          <p className="muted" style={{ marginTop: 0, fontSize: 14 }}>
+            De galerijkaart loopt vanzelf door deze foto&apos;s heen. De eerste
+            foto opent de carrousel.
+          </p>
+          <div className="foto-beheer">
+            {fotos.map((url, i) => (
+              <div className="foto-beheer-item" key={url}>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={url} alt="" />
+                {i === 0 ? (
+                  <span className="pill pill-ok">Eerste</span>
+                ) : (
+                  <form action={zetWinnaarFotoVoorop}>
+                    <input type="hidden" name="id" value={w.id} />
+                    <input type="hidden" name="url" value={url} />
+                    <button className="btn btn-ghost btn-sm" type="submit">
+                      Vooraan
+                    </button>
+                  </form>
+                )}
+                <form action={verwijderWinnaarFoto}>
+                  <input type="hidden" name="id" value={w.id} />
+                  <input type="hidden" name="url" value={url} />
+                  <ConfirmButton
+                    className="btn btn-danger btn-sm"
+                    message="Deze foto uit de galerij halen?"
+                  >
+                    Verwijder
+                  </ConfirmButton>
+                </form>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       <form className="panel" action={wijzigWinnaar}>
         <input type="hidden" name="id" value={w.id} />
-
-        {w.foto_url && (
-          <div style={{ marginBottom: 16 }}>
-            <label>Huidige foto</label>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={w.foto_url}
-              alt=""
-              style={{ maxWidth: 280, borderRadius: 12, display: 'block' }}
-            />
-          </div>
-        )}
 
         <label>Naam winnaar</label>
         <input name="naam" type="text" defaultValue={w.naam} required />
@@ -66,8 +103,10 @@ export default async function WinnaarBewerkPage({
         <label>Toelichting (optioneel)</label>
         <textarea name="toelichting" defaultValue={w.toelichting ?? ''} />
 
-        <label>{w.foto_url ? 'Foto vervangen (optioneel)' : 'Foto toevoegen (optioneel)'}</label>
-        <input name="foto" type="file" accept="image/*" />
+        <label>
+          Foto&apos;s toevoegen (optioneel) — meerdere tegelijk mag
+        </label>
+        <FotoKiezer multiple />
 
         <div style={{ marginTop: 16 }}>
           <button className="btn" type="submit">

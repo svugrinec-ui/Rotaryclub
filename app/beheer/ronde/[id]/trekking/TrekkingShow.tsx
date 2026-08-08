@@ -4,6 +4,9 @@ import { useRef, useState } from 'react';
 import Link from 'next/link';
 import { maakWinnaar } from '@/lib/actions';
 import { IconTrophy } from '@/components/Icons';
+import FotoKiezer from '@/components/FotoKiezer';
+import CijferNummer from '@/components/CijferNummer';
+import { CIJFER_MS } from '@/lib/cijferReveal';
 
 interface Lot {
   lotnummer: number;
@@ -56,9 +59,47 @@ export default function TrekkingShow({
   const [cycling, setCycling] = useState(false);
   const [onthuld, setOnthuld] = useState<Lot | null>(null);
   const [opgeslagen, setOpgeslagen] = useState(false);
+  // Hoeveel cijfers van het winnende lot al in beeld staan.
+  const [zichtbaar, setZichtbaar] = useState(0);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const cijferTimers = useRef<ReturnType<typeof setTimeout>[]>([]);
+
+  function stopCijfers() {
+    cijferTimers.current.forEach(clearTimeout);
+    cijferTimers.current = [];
+    setZichtbaar(0);
+  }
 
   const poolNums = betaaldeLoten.map((l) => l.lotnummer);
+
+  /**
+   * Zendt de stand uit naar de telefoons in de zaal (pagina /live). Bewust
+   * fire-and-forget: de show op dit toestel mag er nooit op wachten.
+   */
+  function zendUit(stand: {
+    fase: 'wachten' | 'rollen' | 'onthuld' | 'klaar';
+    prijs?: { label: string; hoofdprijs: boolean };
+    prijsIndex?: number;
+    prijsTotaal?: number;
+    winnaar?: Lot | null;
+    pool?: number[];
+  }) {
+    fetch('/api/admin/trekking-live', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        ronde_id: rondeId,
+        fase: stand.fase,
+        prijs_label: stand.prijs?.label ?? null,
+        hoofdprijs: stand.prijs?.hoofdprijs ?? false,
+        prijs_index: stand.prijsIndex ?? 0,
+        prijs_totaal: stand.prijsTotaal ?? 0,
+        winnaar_lotnummer: stand.winnaar?.lotnummer ?? null,
+        winnaar_naam: stand.winnaar?.naam ?? null,
+        ...(stand.pool ? { pool_nummers: stand.pool } : {}),
+      }),
+    }).catch(() => {});
+  }
 
   function start() {
     // Onthullingsvolgorde: kleinste prijs eerst, hoofdprijs (experience) als climax.
@@ -72,12 +113,38 @@ export default function TrekkingShow({
     setOnthuld(null);
     setDisplay(null);
     setFase('show');
+    zendUit({
+      fase: 'wachten',
+      prijs: lijst[0],
+      prijsIndex: 0,
+      prijsTotaal: lijst.length,
+      pool: poolNums,
+    });
+  }
+
+  /**
+   * Onthult het lotnummer cijfer voor cijfer op het zaalscherm, met dezelfde
+   * tussentijd als de telefoons. De naam volgt pas na het laatste cijfer.
+   */
+  function onthulCijfers(nummer: number) {
+    const lengte = String(nummer).length;
+    setZichtbaar(0);
+    for (let i = 1; i <= lengte; i++) {
+      cijferTimers.current.push(setTimeout(() => setZichtbaar(i), i * CIJFER_MS));
+    }
   }
 
   function trek() {
     if (cycling || onthuld || pool.length === 0) return;
     const winnaar = pool[Math.floor(Math.random() * pool.length)];
     setCycling(true);
+    // De zaal begint gelijk met rollen; de onthulling volgt hieronder.
+    zendUit({
+      fase: 'rollen',
+      prijs: prijzen[index],
+      prijsIndex: index,
+      prijsTotaal: prijzen.length,
+    });
 
     let verstreken = 0;
     let delay = 45;
@@ -89,11 +156,20 @@ export default function TrekkingShow({
         setDisplay(winnaar.lotnummer);
         setCycling(false);
         setOnthuld(winnaar);
+        // Cijfer voor cijfer, gelijk met de telefoons in de zaal.
+        onthulCijfers(winnaar.lotnummer);
         setPool((prev) => prev.filter((l) => l.lotnummer !== winnaar.lotnummer));
         setWinnaars((prev) => [
           ...prev,
           { prijs: prijzen[index].label, hoofdprijs: prijzen[index].hoofdprijs, lot: winnaar },
         ]);
+        zendUit({
+          fase: 'onthuld',
+          prijs: prijzen[index],
+          prijsIndex: index,
+          prijsTotaal: prijzen.length,
+          winnaar,
+        });
         return;
       }
       if (verstreken > totaal * 0.65) delay += 16; // afremmen naar het einde
@@ -103,25 +179,42 @@ export default function TrekkingShow({
   }
 
   function volgende() {
+    stopCijfers();
     setOnthuld(null);
     setDisplay(null);
     if (index + 1 >= prijzen.length) {
       setFase('klaar');
+      zendUit({ fase: 'klaar', prijsIndex: index, prijsTotaal: prijzen.length });
     } else {
       setIndex((i) => i + 1);
+      zendUit({
+        fase: 'wachten',
+        prijs: prijzen[index + 1],
+        prijsIndex: index + 1,
+        prijsTotaal: prijzen.length,
+      });
     }
   }
 
   // Winnaar accepteert niet: haal 'm uit de uitslag en trek opnieuw voor
   // DEZELFDE prijs. Het geweigerde lot is al uit de pool, dus het komt niet terug.
   function herkans() {
+    stopCijfers();
     setWinnaars((prev) => prev.slice(0, -1));
     setOnthuld(null);
     setDisplay(null);
+    zendUit({
+      fase: 'wachten',
+      prijs: prijzen[index],
+      prijsIndex: index,
+      prijsTotaal: prijzen.length,
+    });
   }
 
   function opnieuw() {
     if (timer.current) clearTimeout(timer.current);
+    stopCijfers();
+    zendUit({ fase: 'klaar', prijsIndex: 0, prijsTotaal: 0 });
     setFase('setup');
     setWinnaars([]);
     setOnthuld(null);
@@ -192,11 +285,25 @@ export default function TrekkingShow({
               )}
             </div>
 
+            <div className="notice notice-info" style={{ marginTop: 16 }}>
+              Wat jij hier trekt, verschijnt gelijk op alle telefoons in de zaal —
+              met ieders eigen lotnummers erbij. Zolang de trekking loopt kan er
+              niemand meer loten kopen.
+            </div>
+
             <div style={{ marginTop: 18 }}>
               <button className="btn btn-gold btn-groot" onClick={start}>
                 <IconTrophy size={20} /> Start trekking
               </button>
             </div>
+
+            <button
+              className="trekking-herkans"
+              style={{ display: 'block' }}
+              onClick={() => zendUit({ fase: 'klaar', prijsIndex: 0, prijsTotaal: 0 })}
+            >
+              Blijft er een trekking op de telefoons staan? Zaalscherm sluiten
+            </button>
           </div>
         )}
       </>
@@ -259,10 +366,10 @@ export default function TrekkingShow({
             <p className="muted" style={{ marginTop: 0 }}>
               {hoofd.lot.naam} — {hoofdprijs}
               {aanbieder ? ` (aangeboden door ${aanbieder})` : ''}. Voeg eventueel
-              een foto toe.
+              foto&apos;s toe.
             </p>
-            <label>Foto (optioneel)</label>
-            <input name="foto" type="file" accept="image/*" />
+            <label>Foto&apos;s (optioneel) — meerdere tegelijk mag</label>
+            <FotoKiezer multiple />
             <div style={{ marginTop: 14 }}>
               <button className="btn" type="submit">
                 Publiceren in galerij
@@ -285,6 +392,9 @@ export default function TrekkingShow({
 
   // ---------- Show: fullscreen onthulling ----------
   const huidige = prijzen[index];
+  // Alle cijfers in beeld? Dan mag de naam erbij.
+  const cijfersKlaar =
+    !!onthuld && zichtbaar >= String(onthuld.lotnummer).length;
   return (
     <div className="trekking-overlay">
       <div className="trekking-ronde">{rondeNaam}</div>
@@ -302,11 +412,21 @@ export default function TrekkingShow({
         )}
       </div>
 
-      <div className={`trekking-nummer ${cycling ? 'cycling' : ''} ${onthuld ? 'reveal' : ''}`}>
-        {display === null ? ' ' : `#${display}`}
+      <div
+        className={`trekking-nummer cijferrij ${cycling ? 'cycling' : ''} ${
+          cijfersKlaar ? 'reveal' : ''
+        }`}
+      >
+        {onthuld ? (
+          <CijferNummer nummer={onthuld.lotnummer} zichtbaar={zichtbaar} />
+        ) : display === null ? (
+          ' '
+        ) : (
+          `#${display}`
+        )}
       </div>
 
-      {onthuld ? (
+      {cijfersKlaar && onthuld ? (
         <div className="trekking-naam reveal">
           <IconTrophy size={40} /> {onthuld.naam}
         </div>

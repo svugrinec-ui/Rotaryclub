@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { serviceClient } from '@/lib/supabase';
 import { bundelVoorBedrag } from '@/lib/bundels';
+import { syncRondeOpbrengst } from '@/lib/ronde-opbrengst';
+import { trekkingActief } from '@/lib/trekkingActief';
 
 export const runtime = 'nodejs';
 
@@ -15,7 +17,10 @@ interface Body {
 
 // Willekeurige lotnummers uit een ruime range, zodat ze aanvoelen als echte
 // loten (niet 1, 2, 3…). De unique-constraint in de DB is de vangnet.
-const MIN = 100;
+// Altijd vier cijfers: de trekking onthult het nummer cijfer voor cijfer, en
+// dat werkt alleen als alle loten even lang zijn. Oudere rondes met kortere
+// nummers blijven gewoon geldig.
+const MIN = 1000;
 const MAX = 9999;
 
 function randomNummers(aantal: number, gebruikt: Set<number>): number[] {
@@ -73,6 +78,20 @@ export async function POST(req: Request) {
     );
   }
 
+  // Trekking begonnen? Dan gaat de verkoop op slot — ook als de ronde nog
+  // open staat. De pagina laat dit ook zien, dit is het slot eronder.
+  const { data: live } = await sb
+    .from('trekking_live')
+    .select('fase, bijgewerkt_op')
+    .eq('ronde_id', rondeId)
+    .maybeSingle();
+  if (trekkingActief(live as { fase: string; bijgewerkt_op: string } | null)) {
+    return NextResponse.json(
+      { error: 'De trekking is begonnen — er kunnen geen loten meer bij.' },
+      { status: 409 },
+    );
+  }
+
   // De bezoeker bevestigt "ik heb betaald" vóór dit punt, dus het lot doet
   // meteen mee met de trekking. De commissie kan dit later terugdraaien.
   // Verdeel het bundelbedrag exact (in centen) over de loten.
@@ -102,9 +121,9 @@ export async function POST(req: Request) {
         { status: 400 },
       );
     }
-    if (eigen.some((n) => !Number.isInteger(n) || n < 1 || n > 9999)) {
+    if (eigen.some((n) => !Number.isInteger(n) || n < MIN || n > MAX)) {
       return NextResponse.json(
-        { error: 'Lotnummers moeten hele getallen tussen 1 en 9999 zijn.' },
+        { error: `Lotnummers zijn vier cijfers: ${MIN} t/m ${MAX}.` },
         { status: 400 },
       );
     }
@@ -128,7 +147,9 @@ export async function POST(req: Request) {
         { status: 500 },
       );
     }
-    return NextResponse.json({ nummers, bedrag: bundel.bedrag });
+    // Meteen doortellen: de maandmeter op de publieke pagina's beweegt live mee.
+    const opbrengst = await syncRondeOpbrengst(rondeId);
+    return NextResponse.json({ nummers, bedrag: bundel.bedrag, opbrengst });
   }
 
   // Anders: willekeurige nummers. Bij gelijktijdige inschrijvingen kan een
@@ -155,7 +176,8 @@ export async function POST(req: Request) {
 
     const { error: insErr } = await sb.from('loten').insert(bouwRijen(nummers));
     if (!insErr) {
-      return NextResponse.json({ nummers, bedrag: bundel.bedrag });
+      const opbrengst = await syncRondeOpbrengst(rondeId);
+      return NextResponse.json({ nummers, bedrag: bundel.bedrag, opbrengst });
     }
     if (insErr.code !== '23505') {
       return NextResponse.json(

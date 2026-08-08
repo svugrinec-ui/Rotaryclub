@@ -10,6 +10,7 @@ import {
 } from '@/lib/instellingen';
 import { IconTrophy } from '@/components/Icons';
 import ExportMailKnop from './ExportMailKnop';
+import FotoKiezer from '@/components/FotoKiezer';
 import type { Ronde, Doel, Winnaar } from '@/lib/types';
 import {
   login,
@@ -255,7 +256,7 @@ export default async function BeheerPage({
       <section>
         <div className="section-head">
           <h2>Winnaars-galerij</h2>
-          <span className="sub">Publiceer winnaars met een foto</span>
+          <span className="sub">Publiceer winnaars met foto&apos;s</span>
         </div>
 
         {winnaars.length > 0 && (
@@ -309,7 +310,7 @@ export default async function BeheerPage({
         <p className="muted">
           Winnaars komen automatisch uit de{' '}
           <span style={{ fontWeight: 600 }}>presentatie-trekking</span>. Hier beheer
-          je ze: publiceren/verbergen, foto toevoegen (Bewerk) of verwijderen.
+          je ze: publiceren/verbergen, foto&apos;s toevoegen (Bewerk) of verwijderen.
         </p>
       </section>
 
@@ -333,7 +334,7 @@ export default async function BeheerPage({
           <label>Omschrijving</label>
           <input name="omschrijving" type="text" placeholder="Korte toelichting op het doel (optioneel)" />
           <label>Foto (optioneel)</label>
-          <input name="foto" type="file" accept="image/*" />
+          <FotoKiezer />
           <input type="hidden" name="jaar" value={new Date().getFullYear()} />
           <div style={{ marginTop: 14 }}>
             <button className="btn" type="submit">
@@ -366,7 +367,7 @@ export default async function BeheerPage({
               />
             )}
             <label>{d.foto_url ? 'Foto vervangen (optioneel)' : 'Foto toevoegen (optioneel)'}</label>
-            <input name="foto" type="file" accept="image/*" />
+            <FotoKiezer />
             <input type="hidden" name="jaar" value={d.jaar ?? ''} />
             <div className="row-actions" style={{ marginTop: 14 }}>
               <button className="btn btn-sm" type="submit">

@@ -1,6 +1,8 @@
 'use client';
 
 import { useState } from 'react';
+import { bewaarMijnLoten } from '@/lib/mijnLoten';
+import MijnLotenRij, { lotenTitel } from '@/components/MijnLotenRij';
 
 export default function LotenOpzoeken() {
   const [naam, setNaam] = useState('');
@@ -25,7 +27,12 @@ export default function LotenOpzoeken() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Zoeken mislukt.');
-      setNummers(data.nummers as number[]);
+      const gevonden = (data.nummers as number[]) ?? [];
+      // Meteen onthouden op dit toestel: dan staan ze klaar bij de live-trekking.
+      if (data.ronde_id && gevonden.length > 0) {
+        bewaarMijnLoten(data.ronde_id as string, naam.trim(), gevonden);
+      }
+      setNummers(gevonden);
     } catch (err) {
       setFout(err instanceof Error ? err.message : 'Onbekende fout.');
     } finally {
@@ -59,8 +66,12 @@ export default function LotenOpzoeken() {
       {nummers !== null &&
         (nummers.length > 0 ? (
           <div className="lot-badge" style={{ marginTop: 14 }}>
-            <small>Je loten van deze loterij:</small>
-            <div className="nummer">{nummers.join(' · ')}</div>
+            <MijnLotenRij
+              nummers={nummers}
+              titel={lotenTitel(nummers.length, naam.trim())}
+              donker
+              groot
+            />
           </div>
         ) : (
           <p className="muted" style={{ marginTop: 12 }}>

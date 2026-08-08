@@ -2,7 +2,8 @@ import { publicClient } from '@/lib/supabase';
 import { maandVoortgang, doelVoorMaand, MAANDDOEL } from '@/lib/doel';
 import { maandTotalen, huidigeEnVorige } from '@/lib/opbrengst';
 import { maandLabel } from '@/lib/format';
-import DoelMeter from '@/components/DoelMeter';
+import LiveDoelMeter from '@/components/LiveDoelMeter';
+import TrekkingOfPagina from '@/components/TrekkingOfPagina';
 import type { Ronde, Experience, Winnaar, Doel } from '@/lib/types';
 import MeedoenForm from './MeedoenForm';
 import LotenOpzoeken from './LotenOpzoeken';
@@ -57,7 +58,9 @@ export default async function MeedoenPage() {
   }
 
   return (
-    <>
+    // Tijdens de trekking vervangt de trekking deze hele pagina: geen verkoop
+    // meer, en niemand hoeft ergens op te klikken.
+    <TrekkingOfPagina>
       <section className="hero">
         <h1>
           Doe mee — <span className="gold">{ronde.naam}</span>
@@ -68,12 +71,11 @@ export default async function MeedoenPage() {
         </p>
       </section>
 
-      <DoelMeter
-        voortgang={voortgang}
+      <LiveDoelMeter
+        start={{ voortgang, doelNaam: huidigDoel?.naam ?? null, vorige }}
+        maand={ronde.maand}
         titel="Samen naar het maanddoel"
-        doelNaam={huidigDoel?.naam}
         motiverend
-        vorige={vorige}
       />
 
       {experiences.length > 0 && (
@@ -105,7 +107,12 @@ export default async function MeedoenPage() {
         </div>
         <MeedoenForm rondeId={ronde.id} />
         <LotenOpzoeken />
+
+        <p className="muted" style={{ textAlign: 'center', marginTop: 18 }}>
+          Trekkingsavond? Zodra de commissie begint, verschijnt de trekking hier
+          op deze pagina — met jouw lotnummers erbij. Je hoeft niets te doen.
+        </p>
       </section>
-    </>
+    </TrekkingOfPagina>
   );
 }
